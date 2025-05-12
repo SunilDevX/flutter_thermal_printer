@@ -206,7 +206,7 @@ packages:
       path: ".."
       relative: true
     source: path
-    version: "1.2.1"
+    version: "1.2.1+1"
   flutter_web_plugins:
     dependency: transitive
     description: flutter
