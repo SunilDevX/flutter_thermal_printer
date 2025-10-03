@@ -4,13 +4,11 @@ import 'dart:async';
 import 'dart:developer';
 import 'dart:io';
 
-import 'package:ffi/ffi.dart';
 import 'package:flutter/services.dart';
 import 'package:universal_ble/universal_ble.dart';
-import 'package:win32/win32.dart';
+import 'Windows/windows_platform.dart'
+    if (dart.library.html) 'Windows/windows_stub.dart';
 
-import 'Windows/print_data.dart';
-import 'Windows/printers_data.dart';
 import 'flutter_thermal_printer_platform_interface.dart';
 import 'utils/printer.dart';
 
