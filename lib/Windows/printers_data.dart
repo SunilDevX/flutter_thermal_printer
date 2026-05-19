@@ -36,7 +36,7 @@ class PrinterNames {
     _pBuffSize = calloc<DWORD>();
     _bPrinterLen = calloc<DWORD>();
 
-    EnumPrinters(_flags, nullptr, 2, nullptr, 0, _pBuffSize, _bPrinterLen);
+    EnumPrinters(_flags, null, 2, null, 0, _pBuffSize, _bPrinterLen);
 
     if (_pBuffSize.value == 0) {
       throw Exception('Read printer buffer size fail');
@@ -50,14 +50,14 @@ class PrinterNames {
 
     final isRawBuffFail = EnumPrinters(
           _flags,
-          nullptr,
+          null,
           2,
           _rawBuffer,
           _pBuffSize.value,
           _pBuffSize,
           _bPrinterLen,
-        ) ==
-        0;
+        ).value ==
+        false;
 
     if (isRawBuffFail) {
       throw Exception('Read printer raw buffer fail');

@@ -14,7 +14,7 @@ A new Flutter project.
   s.author           = { 'Your Company' => 'email@example.com' }
 
   s.source           = { :path => '.' }
-  s.source_files     = 'Classes/**/*'
+  s.source_files     = 'flutter_thermal_printer/Sources/flutter_thermal_printer/**/*.swift'
   s.dependency 'FlutterMacOS' 
   s.platform = :osx, '10.15'
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }

@@ -1,28 +1,15 @@
 PODS:
-  - flutter_thermal_printer (0.0.1):
-    - FlutterMacOS
   - FlutterMacOS (1.0.0)
-  - universal_ble (0.0.1):
-    - Flutter
-    - FlutterMacOS
 
 DEPENDENCIES:
-  - flutter_thermal_printer (from `Flutter/ephemeral/.symlinks/plugins/flutter_thermal_printer/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
-  - universal_ble (from `Flutter/ephemeral/.symlinks/plugins/universal_ble/darwin`)
 
 EXTERNAL SOURCES:
-  flutter_thermal_printer:
-    :path: Flutter/ephemeral/.symlinks/plugins/flutter_thermal_printer/macos
   FlutterMacOS:
     :path: Flutter/ephemeral
-  universal_ble:
-    :path: Flutter/ephemeral/.symlinks/plugins/universal_ble/darwin
 
 SPEC CHECKSUMS:
-  flutter_thermal_printer: e17510c2f9a687d7b1c96586495747e6ad16fea9
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
-  universal_ble: 65e1257dffc557cc7991a93d253beeddc7c1dc92
 
 PODFILE CHECKSUM: 86185b553e48c8685b3c0c73d1da77bf3fc4d159
 
