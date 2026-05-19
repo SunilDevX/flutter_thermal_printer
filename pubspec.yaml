@@ -1,6 +1,6 @@
 name: flutter_thermal_printer
 description: "Plugin for Flutter to print on thermal printers via ESC/POS commands."
-version: 2.0.1
+version: 2.2.1
 homepage: "https://sunilflutter.in/"
 repository: "https://github.com/SunilDevX/flutter_thermal_printer"
 

@@ -1,3 +1,12 @@
+## 2.2.1
+
+* Added Swift Package Manager support for iOS and macOS, so Flutter apps can use the plugin through the newer Apple package flow.
+* Kept CocoaPods support in place for projects that have not moved fully to Swift Package Manager yet.
+* Moved the iOS and macOS Swift sources into the package layout expected by Swift Package Manager.
+* Updated the iOS minimum version to 13.1 to match the current `universal_ble` requirement.
+* Updated dependency versions, including `universal_ble`, `image`, and `win32`.
+* Fixed the Windows raw-printing helpers so they compile cleanly with the latest `win32` API.
+
 ## 2.0.1
 
 * Fixed BLE discovery to also include system-connected devices using `getSystemDevices()`.
