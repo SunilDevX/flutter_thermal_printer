@@ -25,6 +25,6 @@ class RawPrinter {
 }
 
 // Stub implementation for FFI's using function
-R using<R>(R Function() computation) {
+R using<R>(R Function(dynamic) computation, [dynamic allocator]) {
   throw UnsupportedError('FFI using function is not supported on web platform');
 }
