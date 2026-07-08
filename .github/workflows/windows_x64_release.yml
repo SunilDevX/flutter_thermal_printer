@@ -2,6 +2,9 @@ name: Windows x64 Release
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - windowsdev
 
 jobs:
   build:
