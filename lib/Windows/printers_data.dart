@@ -15,7 +15,10 @@ class PrinterNames {
 
   Iterable<String> all() sync* {
     try {
-      _getBufferSize();
+      final hasPrinters = _getBufferSize();
+      if (!hasPrinters) {
+        return;
+      }
 
       try {
         _readRawBuff();
@@ -32,15 +35,31 @@ class PrinterNames {
   late Pointer<DWORD> _pBuffSize;
   late Pointer<DWORD> _bPrinterLen;
 
-  void _getBufferSize() {
+  bool _getBufferSize() {
     _pBuffSize = calloc<DWORD>();
     _bPrinterLen = calloc<DWORD>();
 
-    EnumPrinters(_flags, null, 2, null, 0, _pBuffSize, _bPrinterLen);
+    final result = EnumPrinters(
+      _flags,
+      null,
+      2,
+      null,
+      0,
+      _pBuffSize,
+      _bPrinterLen,
+    );
 
-    if (_pBuffSize.value == 0) {
-      throw Exception('Read printer buffer size fail');
+    if (_pBuffSize.value > 0) {
+      return true;
     }
+
+    if (result.value || result.error == ERROR_NO_MORE_ITEMS) {
+      return false;
+    }
+
+    throw Exception(
+      'Read printer buffer size fail: Win32 error ${result.error.code}',
+    );
   }
 
   late Pointer<BYTE> _rawBuffer;
@@ -48,19 +67,20 @@ class PrinterNames {
   void _readRawBuff() {
     _rawBuffer = malloc.allocate<BYTE>(_pBuffSize.value);
 
-    final isRawBuffFail = EnumPrinters(
-          _flags,
-          null,
-          2,
-          _rawBuffer,
-          _pBuffSize.value,
-          _pBuffSize,
-          _bPrinterLen,
-        ).value ==
-        false;
+    final result = EnumPrinters(
+      _flags,
+      null,
+      2,
+      _rawBuffer,
+      _pBuffSize.value,
+      _pBuffSize,
+      _bPrinterLen,
+    );
 
-    if (isRawBuffFail) {
-      throw Exception('Read printer raw buffer fail');
+    if (!result.value) {
+      throw Exception(
+        'Read printer raw buffer fail: Win32 error ${result.error.code}',
+      );
     }
   }
 

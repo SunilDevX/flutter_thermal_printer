@@ -76,6 +76,9 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 # Disable install commands for gtest so it doesn't end up in the bundle.
 set(INSTALL_GTEST OFF CACHE BOOL "Disable installation of googletest" FORCE)
+# googletest release-1.11.0 declares compatibility with old CMake versions;
+# recent CMake versions need a policy floor to configure it without warnings.
+set(CMAKE_POLICY_VERSION_MINIMUM 3.10)
 FetchContent_MakeAvailable(googletest)
 
 # The plugin's C API is not very useful for unit testing, so build the sources

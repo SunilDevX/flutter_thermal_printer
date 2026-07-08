@@ -1,0 +1,38 @@
+name: Windows x64 Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Windows x64
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Get package dependencies
+        run: flutter pub get
+
+      - name: Get example dependencies
+        working-directory: example
+        run: flutter pub get
+
+      - name: Build example for Windows x64
+        working-directory: example
+        run: flutter build windows --release
+
+      - name: Upload Windows x64 release
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-thermal-printer-windows-x64
+          path: example/build/windows/x64/runner/Release/**

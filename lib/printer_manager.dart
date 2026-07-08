@@ -329,26 +329,30 @@ class PrinterManager {
         await _usbSubscription?.cancel();
         _usbSubscription =
             Stream.periodic(refreshDuration, (x) => x).listen((event) async {
-          final devices = PrinterNames(PRINTER_ENUM_LOCAL);
-          final tempList = <Printer>[];
+          try {
+            final devices = PrinterNames(PRINTER_ENUM_LOCAL);
+            final tempList = <Printer>[];
 
-          for (final printerName in devices.all()) {
-            final device = Printer(
-              vendorId: printerName,
-              productId: 'N/A',
-              name: printerName,
-              connectionType: ConnectionType.USB,
-              address: printerName,
-              isConnected: true,
-            );
-            tempList.add(device);
-          }
+            for (final printerName in devices.all()) {
+              final device = Printer(
+                vendorId: printerName,
+                productId: 'N/A',
+                name: printerName,
+                connectionType: ConnectionType.USB,
+                address: printerName,
+                isConnected: true,
+              );
+              tempList.add(device);
+            }
 
-          // Update devices list and stream
-          for (final printer in tempList) {
-            _updateOrAddPrinter(printer);
+            // Update devices list and stream
+            for (final printer in tempList) {
+              _updateOrAddPrinter(printer);
+            }
+            sortDevices();
+          } catch (e) {
+            log('$e [Windows USB printer scan]');
           }
-          sortDevices();
         });
       } else {
         // Non-Windows USB printer discovery
