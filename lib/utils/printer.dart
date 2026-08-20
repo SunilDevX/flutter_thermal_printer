@@ -1,5 +1,7 @@
 // ignore_for_file: constant_identifier_names
 
+import 'dart:typed_data';
+
 import 'package:universal_ble/universal_ble.dart';
 
 /// Optimized printer model with better data validation and serialization
@@ -11,6 +13,9 @@ class Printer extends BleDevice {
     this.isConnected,
     this.vendorId,
     this.productId,
+    super.services,
+    super.serviceData,
+    super.manufacturerDataList,
   }) : super(deviceId: address ?? '', name: name ?? '');
 
   /// Create Printer from JSON with validation
@@ -68,6 +73,10 @@ class Printer extends BleDevice {
   }
 
   /// Create a copy with updated fields
+  ///
+  /// Advertisement data ([services], [serviceData], [manufacturerDataList]) is
+  /// carried over unless explicitly overridden, so connection-state updates do
+  /// not discard what the scan reported.
   Printer copyWith({
     String? address,
     String? name,
@@ -75,6 +84,9 @@ class Printer extends BleDevice {
     bool? isConnected,
     String? vendorId,
     String? productId,
+    List<String>? services,
+    Map<String, Uint8List>? serviceData,
+    List<ManufacturerData>? manufacturerDataList,
   }) =>
       Printer(
         address: address ?? this.address,
@@ -83,7 +95,35 @@ class Printer extends BleDevice {
         isConnected: isConnected ?? this.isConnected,
         vendorId: vendorId ?? this.vendorId,
         productId: productId ?? this.productId,
+        services: services ?? this.services,
+        serviceData: serviceData ?? this.serviceData,
+        manufacturerDataList: manufacturerDataList ?? this.manufacturerDataList,
       );
+
+  /// Inherit [previous]'s advertisement data when this record carries none.
+  ///
+  /// Devices reported by `getSystemDevices()` or by a connection-state change
+  /// have no advertisement payload, so replacing a scanned record with one of
+  /// them would drop the service UUIDs the scan already resolved.
+  Printer mergeAdvertisementData(Printer previous) {
+    final inheritServices = services.isEmpty && previous.services.isNotEmpty;
+    final inheritServiceData =
+        serviceData.isEmpty && previous.serviceData.isNotEmpty;
+    final inheritManufacturerData = manufacturerDataList.isEmpty &&
+        previous.manufacturerDataList.isNotEmpty;
+
+    if (!inheritServices && !inheritServiceData && !inheritManufacturerData) {
+      return this;
+    }
+
+    return copyWith(
+      services: inheritServices ? previous.services : services,
+      serviceData: inheritServiceData ? previous.serviceData : serviceData,
+      manufacturerDataList: inheritManufacturerData
+          ? previous.manufacturerDataList
+          : manufacturerDataList,
+    );
+  }
 
   /// Generate unique identifier for the printer
   String get uniqueId {
