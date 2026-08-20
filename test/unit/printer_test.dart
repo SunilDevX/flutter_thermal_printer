@@ -564,7 +564,7 @@ void main() {
     });
 
     group('mergeAdvertisementData', () {
-      test('keeps previous data when this record carries none', () {
+      test('carries previous data over when incoming has none', () {
         final scanned = Printer(
           address: 'addr',
           name: 'name',
@@ -580,7 +580,10 @@ void main() {
           isConnected: true,
         );
 
-        final merged = systemRecord.mergeAdvertisementData(scanned);
+        final merged = Printer.mergeAdvertisementData(
+          previous: scanned,
+          incoming: systemRecord,
+        );
 
         expect(merged.isConnected, true);
         expect(merged.services, scanned.services);
@@ -588,7 +591,7 @@ void main() {
         expect(merged.manufacturerDataList, scanned.manufacturerDataList);
       });
 
-      test('keeps its own data when it carries some', () {
+      test('keeps incoming data when incoming carries some', () {
         final previous = Printer(
           address: 'addr',
           services: const ['0000180d-0000-1000-8000-00805f9b34fb'],
@@ -598,19 +601,72 @@ void main() {
           services: const ['000018f0-0000-1000-8000-00805f9b34fb'],
         );
 
-        final merged = incoming.mergeAdvertisementData(previous);
+        final merged = Printer.mergeAdvertisementData(
+          previous: previous,
+          incoming: incoming,
+        );
 
         expect(merged.services, ['000018f0-0000-1000-8000-00805f9b34fb']);
       });
 
-      test('returns identical instance when nothing to inherit', () {
+      test('does not keep stale serviceData alongside fresh services', () {
+        final previous = Printer(
+          address: 'addr',
+          services: const ['000018f0-0000-1000-8000-00805f9b34fb'],
+          serviceData: serviceData,
+        );
+        final incoming = Printer(
+          address: 'addr',
+          services: const ['000018f0-0000-1000-8000-00805f9b34fb'],
+        );
+
+        final merged = Printer.mergeAdvertisementData(
+          previous: previous,
+          incoming: incoming,
+        );
+
+        expect(merged.serviceData, isEmpty);
+      });
+
+      test('returns incoming unchanged when there is nothing to inherit', () {
         final incoming = Printer(address: 'addr');
         final previous = Printer(address: 'addr');
 
         expect(
-          identical(incoming.mergeAdvertisementData(previous), incoming),
+          identical(
+            Printer.mergeAdvertisementData(
+              previous: previous,
+              incoming: incoming,
+            ),
+            incoming,
+          ),
           true,
         );
+      });
+
+      test('inheriting keeps the incoming connection state, not previous', () {
+        // With the arguments swapped, every fresh isConnected/name update
+        // would be silently discarded; this pins the direction.
+        final previous = Printer(
+          address: 'addr',
+          name: 'old name',
+          isConnected: false,
+          services: const ['000018f0-0000-1000-8000-00805f9b34fb'],
+        );
+        final incoming = Printer(
+          address: 'addr',
+          name: 'new name',
+          isConnected: true,
+        );
+
+        final merged = Printer.mergeAdvertisementData(
+          previous: previous,
+          incoming: incoming,
+        );
+
+        expect(merged.name, 'new name');
+        expect(merged.isConnected, true);
+        expect(merged.services, previous.services);
       });
     });
   });

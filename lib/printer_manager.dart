@@ -504,7 +504,10 @@ class PrinterManager {
     } else {
       // System-device and connection-state records carry no advertisement
       // payload, so keep the one the scan already resolved for this device.
-      _devices[index] = printer.mergeAdvertisementData(_devices[index]);
+      _devices[index] = Printer.mergeAdvertisementData(
+        previous: _devices[index],
+        incoming: printer,
+      );
     }
     if (printer.connectionType == ConnectionType.BLE &&
         (printer.address?.isNotEmpty ?? false)) {
@@ -555,9 +558,6 @@ class PrinterManager {
             name: deviceName,
             connectionType: ConnectionType.BLE,
             isConnected: isConnected,
-            services: device.services,
-            serviceData: device.serviceData,
-            manufacturerDataList: device.manufacturerDataList,
           ),
         );
       }

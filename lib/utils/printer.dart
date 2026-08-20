@@ -100,28 +100,43 @@ class Printer extends BleDevice {
         manufacturerDataList: manufacturerDataList ?? this.manufacturerDataList,
       );
 
-  /// Inherit [previous]'s advertisement data when this record carries none.
+  /// Carry [previous]'s advertisement data over to [incoming] when [incoming]
+  /// has none of its own.
   ///
-  /// Devices reported by `getSystemDevices()` or by a connection-state change
-  /// have no advertisement payload, so replacing a scanned record with one of
-  /// them would drop the service UUIDs the scan already resolved.
-  Printer mergeAdvertisementData(Printer previous) {
-    final inheritServices = services.isEmpty && previous.services.isNotEmpty;
-    final inheritServiceData =
-        serviceData.isEmpty && previous.serviceData.isNotEmpty;
-    final inheritManufacturerData = manufacturerDataList.isEmpty &&
-        previous.manufacturerDataList.isNotEmpty;
-
-    if (!inheritServices && !inheritServiceData && !inheritManufacturerData) {
-      return this;
+  /// Records from `getSystemDevices()` or from a connection-state change carry
+  /// no advertisement payload, so replacing a scanned record with one of them
+  /// would drop the service UUIDs the scan already resolved.
+  ///
+  /// The decision is all-or-nothing on purpose. A record that carries any
+  /// advertisement data is treated as authoritative for all three fields, so a
+  /// scan result whose `serviceData` is legitimately empty this time does not
+  /// keep reporting bytes the peripheral has stopped advertising.
+  ///
+  /// Named parameters rather than a receiver and an argument: the two are
+  /// interchangeable at the call site and getting the order backwards would
+  /// silently discard every fresh `isConnected` or `name` update.
+  static Printer mergeAdvertisementData({
+    required Printer previous,
+    required Printer incoming,
+  }) {
+    final hasOwnData = incoming.services.isNotEmpty ||
+        incoming.serviceData.isNotEmpty ||
+        incoming.manufacturerDataList.isNotEmpty;
+    if (hasOwnData) {
+      return incoming;
     }
 
-    return copyWith(
-      services: inheritServices ? previous.services : services,
-      serviceData: inheritServiceData ? previous.serviceData : serviceData,
-      manufacturerDataList: inheritManufacturerData
-          ? previous.manufacturerDataList
-          : manufacturerDataList,
+    final hasInheritable = previous.services.isNotEmpty ||
+        previous.serviceData.isNotEmpty ||
+        previous.manufacturerDataList.isNotEmpty;
+    if (!hasInheritable) {
+      return incoming;
+    }
+
+    return incoming.copyWith(
+      services: previous.services,
+      serviceData: previous.serviceData,
+      manufacturerDataList: previous.manufacturerDataList,
     );
   }
 
