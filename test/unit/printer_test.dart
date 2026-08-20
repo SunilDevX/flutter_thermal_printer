@@ -1,5 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_thermal_printer/utils/printer.dart';
+import 'package:universal_ble/universal_ble.dart';
 
 void main() {
   group('Printer', () {
@@ -495,6 +498,176 @@ void main() {
     test('name override works', () {
       final printer = Printer(name: 'Custom Name', address: 'addr');
       expect(printer.name, 'Custom Name');
+    });
+  });
+
+  group('advertisement data', () {
+    final serviceData = <String, Uint8List>{
+      '000018f0-0000-1000-8000-00805f9b34fb': Uint8List.fromList([1, 2, 3]),
+    };
+    final manufacturerDataList = [
+      ManufacturerData(0x004c, Uint8List.fromList([9, 8])),
+    ];
+
+    test('constructor forwards advertisement data to BleDevice', () {
+      final printer = Printer(
+        address: 'addr',
+        name: 'name',
+        connectionType: ConnectionType.BLE,
+        services: const ['000018f0-0000-1000-8000-00805f9b34fb'],
+        serviceData: serviceData,
+        manufacturerDataList: manufacturerDataList,
+      );
+
+      expect(printer.services, ['000018f0-0000-1000-8000-00805f9b34fb']);
+      expect(printer.serviceData, serviceData);
+      expect(printer.manufacturerDataList, manufacturerDataList);
+    });
+
+    test('defaults to empty advertisement data', () {
+      final printer = Printer(address: 'addr');
+
+      expect(printer.services, isEmpty);
+      expect(printer.serviceData, isEmpty);
+      expect(printer.manufacturerDataList, isEmpty);
+    });
+
+    test('copyWith preserves advertisement data', () {
+      final original = Printer(
+        address: 'addr',
+        name: 'name',
+        connectionType: ConnectionType.BLE,
+        services: const ['000018f0-0000-1000-8000-00805f9b34fb'],
+        serviceData: serviceData,
+        manufacturerDataList: manufacturerDataList,
+      );
+
+      final copy = original.copyWith(isConnected: true);
+
+      expect(copy.isConnected, true);
+      expect(copy.services, original.services);
+      expect(copy.serviceData, original.serviceData);
+      expect(copy.manufacturerDataList, original.manufacturerDataList);
+    });
+
+    test('copyWith can override advertisement data', () {
+      final original = Printer(
+        address: 'addr',
+        services: const ['000018f0-0000-1000-8000-00805f9b34fb'],
+      );
+
+      final copy = original.copyWith(
+        services: const ['0000180d-0000-1000-8000-00805f9b34fb'],
+      );
+
+      expect(copy.services, ['0000180d-0000-1000-8000-00805f9b34fb']);
+    });
+
+    group('mergeAdvertisementData', () {
+      test('carries previous data over when incoming has none', () {
+        final scanned = Printer(
+          address: 'addr',
+          name: 'name',
+          connectionType: ConnectionType.BLE,
+          services: const ['000018f0-0000-1000-8000-00805f9b34fb'],
+          serviceData: serviceData,
+          manufacturerDataList: manufacturerDataList,
+        );
+        final systemRecord = Printer(
+          address: 'addr',
+          name: 'name',
+          connectionType: ConnectionType.BLE,
+          isConnected: true,
+        );
+
+        final merged = Printer.mergeAdvertisementData(
+          previous: scanned,
+          incoming: systemRecord,
+        );
+
+        expect(merged.isConnected, true);
+        expect(merged.services, scanned.services);
+        expect(merged.serviceData, scanned.serviceData);
+        expect(merged.manufacturerDataList, scanned.manufacturerDataList);
+      });
+
+      test('keeps incoming data when incoming carries some', () {
+        final previous = Printer(
+          address: 'addr',
+          services: const ['0000180d-0000-1000-8000-00805f9b34fb'],
+        );
+        final incoming = Printer(
+          address: 'addr',
+          services: const ['000018f0-0000-1000-8000-00805f9b34fb'],
+        );
+
+        final merged = Printer.mergeAdvertisementData(
+          previous: previous,
+          incoming: incoming,
+        );
+
+        expect(merged.services, ['000018f0-0000-1000-8000-00805f9b34fb']);
+      });
+
+      test('does not keep stale serviceData alongside fresh services', () {
+        final previous = Printer(
+          address: 'addr',
+          services: const ['000018f0-0000-1000-8000-00805f9b34fb'],
+          serviceData: serviceData,
+        );
+        final incoming = Printer(
+          address: 'addr',
+          services: const ['000018f0-0000-1000-8000-00805f9b34fb'],
+        );
+
+        final merged = Printer.mergeAdvertisementData(
+          previous: previous,
+          incoming: incoming,
+        );
+
+        expect(merged.serviceData, isEmpty);
+      });
+
+      test('returns incoming unchanged when there is nothing to inherit', () {
+        final incoming = Printer(address: 'addr');
+        final previous = Printer(address: 'addr');
+
+        expect(
+          identical(
+            Printer.mergeAdvertisementData(
+              previous: previous,
+              incoming: incoming,
+            ),
+            incoming,
+          ),
+          true,
+        );
+      });
+
+      test('inheriting keeps the incoming connection state, not previous', () {
+        // With the arguments swapped, every fresh isConnected/name update
+        // would be silently discarded; this pins the direction.
+        final previous = Printer(
+          address: 'addr',
+          name: 'old name',
+          isConnected: false,
+          services: const ['000018f0-0000-1000-8000-00805f9b34fb'],
+        );
+        final incoming = Printer(
+          address: 'addr',
+          name: 'new name',
+          isConnected: true,
+        );
+
+        final merged = Printer.mergeAdvertisementData(
+          previous: previous,
+          incoming: incoming,
+        );
+
+        expect(merged.name, 'new name');
+        expect(merged.isConnected, true);
+        expect(merged.services, previous.services);
+      });
     });
   });
 }
