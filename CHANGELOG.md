@@ -1,3 +1,7 @@
+## 2.2.2
+
+* Preserved BLE advertisement data (`services`, `serviceData`, and `manufacturerDataList`) when scan results are converted to `Printer` objects and during connection-state synchronization. Thanks to `@Erengun` for the changes in PR #50.
+
 ## 2.2.1
 
 * Added Swift Package Manager support for iOS and macOS, so Flutter apps can use the plugin through the newer Apple package flow.
