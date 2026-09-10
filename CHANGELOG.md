@@ -1,3 +1,12 @@
+## 2.3.0
+
+* Classify installed macOS printers from their native device URI as USB, NETWORK, or unknown, instead of labeling every print queue as USB.
+* Add `Printer.deviceUri`, `queueName`, `isSystemPrinter`, and `connectionTypeFromDeviceUri`, preserving queue metadata through serialization and connection-state updates.
+* Include installed macOS network queues in the default scan. Explicit USB-only scans now exclude network queues; NETWORK-only scans return installed macOS network queues. Unknown queues appear when both USB and NETWORK are requested.
+* Keep macOS system queues on the native printing backend for connection checks, `printData`, and `printWidget`, regardless of connection type. Network classification does not imply ESC/POS compatibility or discover uninstalled LAN printers.
+* Refresh macOS queue snapshots to remove deleted printers and reflect changed connection types, and return filtered device-list snapshots to stream listeners.
+* Update the example to include network queues and display each printer's connection type, with regression tests for classification, filtering, metadata preservation, and native print routing.
+
 ## 2.2.2
 
 * Preserved BLE advertisement data (`services`, `serviceData`, and `manufacturerDataList`) when scan results are converted to `Printer` objects and during connection-state synchronization. Thanks to `@Erengun` for the changes in PR #50.
