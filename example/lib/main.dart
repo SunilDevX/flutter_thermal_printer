@@ -31,21 +31,20 @@ class _MyAppState extends State<MyApp> {
 
   // Get Printer List
   void startScan() async {
-    _devicesStreamSubscription?.cancel();
-    await _flutterThermalPrinterPlugin.getPrinters(connectionTypes: [
-      ConnectionType.USB,
-      ConnectionType.BLE,
-    ]);
+    await _devicesStreamSubscription?.cancel();
     _devicesStreamSubscription = _flutterThermalPrinterPlugin.devicesStream
         .listen((List<Printer> event) {
       setState(() {
         printers = event;
-        printers.removeWhere((element) =>
-            element.name == null ||
-            element.name == '' ||
-            element.name!.toLowerCase().contains("print") == false);
+        printers.removeWhere(
+            (element) => element.name == null || element.name == '');
       });
     });
+    await _flutterThermalPrinterPlugin.getPrinters(connectionTypes: [
+      ConnectionType.USB,
+      ConnectionType.BLE,
+      ConnectionType.NETWORK,
+    ]);
   }
 
   @override
@@ -152,7 +151,7 @@ class _MyAppState extends State<MyApp> {
               const Divider(),
               const SizedBox(height: 22),
               Text(
-                'USB/BLE',
+                'Discovered printers',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 22),
@@ -196,7 +195,7 @@ class _MyAppState extends State<MyApp> {
                       },
                       title: Text(printers[index].name ?? 'No Name'),
                       subtitle: Text(
-                          "Connected: ${printers[index].isConnected ?? false}"),
+                          "Connected: ${printers[index].isConnected ?? false} Via ${printers[index].connectionTypeString}"),
                       trailing: IconButton(
                         icon: const Icon(Icons.connect_without_contact),
                         onPressed: () async {

@@ -75,6 +75,7 @@ public class FlutterThermalPrinterPlugin: NSObject, FlutterPlugin  , FlutterStre
         
         // Get all available printers using NSPrinter
         let availablePrinters = NSPrinter.printerNames
+        let metadataByName = PrinterDiscovery.metadataByName()
         
         for (index, printerName) in availablePrinters.enumerated() {
             if let printer = NSPrinter(name: printerName) {
@@ -89,7 +90,13 @@ public class FlutterThermalPrinterPlugin: NSObject, FlutterPlugin  , FlutterStre
                     serialNr: nil // Printers typically don't expose serial numbers via NSPrinter,
                     
                 )
-                printers.append(printerDevice.toDictionary())
+                var record = printerDevice.toDictionary()
+                let metadata = metadataByName[printerName] ?? [:]
+                // Keep queue identity separate from the actual device URI.
+                record["queueName"] = metadata["queueName"] ?? printerName
+                record["address"] = metadata["queueName"] ?? printerName
+                record["deviceUri"] = metadata["deviceUri"]
+                printers.append(record)
             }
         }
         

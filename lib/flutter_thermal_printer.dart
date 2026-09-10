@@ -22,7 +22,7 @@ export 'package:universal_ble/universal_ble.dart';
 /// on Windows (USB/BLE) and other platforms (Android/iOS/macOS).
 class FlutterThermalPrinter {
   FlutterThermalPrinter._({BleConfig bleConfig = const BleConfig()})
-      : _bleConfig = bleConfig;
+    : _bleConfig = bleConfig;
 
   // ==========================================================================
   // STATIC VARIABLES AND INSTANCE
@@ -73,11 +73,10 @@ class FlutterThermalPrinter {
   Future<bool> connect(
     Printer device, {
     Duration? connectionStabilizationDelay,
-  }) async =>
-      PrinterManager.instance.connect(
-        device,
-        connectionStabilizationDelay: connectionStabilizationDelay,
-      );
+  }) async => PrinterManager.instance.connect(
+    device,
+    connectionStabilizationDelay: connectionStabilizationDelay,
+  );
 
   /// Disconnect from a printer device
   Future<void> disconnect(Printer device) async {
@@ -95,25 +94,26 @@ class FlutterThermalPrinter {
     List<int> bytes, {
     bool longData = false,
     int? chunkSize,
-  }) async =>
-      PrinterManager.instance.printData(
-        device,
-        bytes,
+  }) async => PrinterManager.instance.printData(
+    device,
+    bytes,
 
-        ///
-        /// [refreshDuration] The duration between each scan refresh.
-        /// [connectionTypes] List of connection types to scan for (BLE, USB).
-        /// [androidUsesFineLocation] Whether to use fine location on Android for BLE scanning.
-        longData: longData,
-        chunkSize: chunkSize,
-      );
+    ///
+    /// [refreshDuration] The duration between each scan refresh.
+    /// [connectionTypes] List of connection types to scan for (BLE, USB).
+    /// [androidUsesFineLocation] Whether to use fine location on Android for BLE scanning.
+    longData: longData,
+    chunkSize: chunkSize,
+  );
 
-  /// Get available printers
+  /// Get available printers. NETWORK includes installed macOS print queues;
+  /// it does not scan the LAN for uninstalled printers or imply ESC/POS support.
   Future<void> getPrinters({
     Duration refreshDuration = const Duration(seconds: 2),
     List<ConnectionType> connectionTypes = const [
       ConnectionType.USB,
       ConnectionType.BLE,
+      ConnectionType.NETWORK,
     ],
     bool androidUsesFineLocation = false,
   }) async {
@@ -267,9 +267,7 @@ class FlutterThermalPrinter {
         height: actualHeight,
       );
 
-      final raster = generator.imageRaster(
-        croppedImage,
-      );
+      final raster = generator.imageRaster(croppedImage);
       bytes.addAll(raster);
     }
 
@@ -313,19 +311,15 @@ class FlutterThermalPrinter {
 
     imagebytes = _buildImageRasterAvailable(imagebytes);
 
-    if ((Platform.isMacOS || Platform.isWindows) &&
-        printer.connectionType == ConnectionType.USB) {
+    if ((Platform.isMacOS && printer.isSystemPrinter) ||
+        ((Platform.isMacOS || Platform.isWindows) &&
+            printer.connectionType == ConnectionType.USB)) {
       List<int> raster;
       raster = ticket.imageRaster(imagebytes);
       if (cutAfterPrinted) {
         raster += ticket.cut();
       }
-      await printData(
-        printer,
-        raster,
-        longData: true,
-        chunkSize: chunkSize,
-      );
+      await printData(printer, raster, longData: true, chunkSize: chunkSize);
     } else {
       // For other platforms, use chunked approach
       const chunkHeight = 30;
@@ -349,9 +343,7 @@ class FlutterThermalPrinter {
           height: actualHeight,
         );
 
-        raster += ticket.imageRaster(
-          croppedImage,
-        );
+        raster += ticket.imageRaster(croppedImage);
       }
       await printData(printer, raster, longData: true, chunkSize: chunkSize);
 

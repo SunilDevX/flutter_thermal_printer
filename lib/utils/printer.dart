@@ -13,6 +13,8 @@ class Printer extends BleDevice {
     this.isConnected,
     this.vendorId,
     this.productId,
+    this.deviceUri,
+    this.queueName,
     super.services,
     super.serviceData,
     super.manufacturerDataList,
@@ -24,11 +26,14 @@ class Printer extends BleDevice {
       return Printer(
         address: json['address'] as String?,
         name: json['name'] as String?,
-        connectionType:
-            _getConnectionTypeFromString(json['connectionType'] as String?),
+        connectionType: json['queueName'] != null
+            ? connectionTypeFromDeviceUri(json['deviceUri'] as String?)
+            : _getConnectionTypeFromString(json['connectionType'] as String?),
         isConnected: json['isConnected'] as bool?,
         vendorId: json['vendorId']?.toString(),
         productId: json['productId']?.toString(),
+        deviceUri: json['deviceUri'] as String?,
+        queueName: json['queueName'] as String?,
       );
     } catch (e) {
       throw FormatException('Invalid Printer JSON format: $e');
@@ -44,6 +49,36 @@ class Printer extends BleDevice {
   final String? vendorId;
   final String? productId;
 
+  /// Native print queue destination URI, such as `usb://` or `dnssd://`.
+  /// A Bonjour URI is not an IP address for raw TCP printing.
+  final String? deviceUri;
+
+  /// macOS system queue ID. These printers use the native printing backend
+  /// regardless of their USB, network, or unknown connection type.
+  final String? queueName;
+
+  bool get isSystemPrinter => queueName?.isNotEmpty ?? false;
+
+  /// Classify a queue's device URI, not the local CUPS server's queue URL.
+  /// Unknown schemes (including classic Bluetooth) are not assumed to be BLE.
+  static ConnectionType? connectionTypeFromDeviceUri(String? deviceUri) {
+    switch (Uri.tryParse(deviceUri ?? '')?.scheme.toLowerCase()) {
+      case 'usb':
+        return ConnectionType.USB;
+      case 'dnssd':
+      case 'ipp':
+      case 'ipps':
+      case 'http':
+      case 'https':
+      case 'socket':
+      case 'lpd':
+      case 'smb':
+        return ConnectionType.NETWORK;
+      default:
+        return null;
+    }
+  }
+
   /// Convert to JSON with proper formatting
   Map<String, dynamic> toJson() {
     final data = <String, dynamic>{};
@@ -54,6 +89,12 @@ class Printer extends BleDevice {
     data['isConnected'] = isConnected;
     data['vendorId'] = vendorId;
     data['productId'] = productId;
+    if (deviceUri != null) {
+      data['deviceUri'] = deviceUri;
+    }
+    if (queueName != null) {
+      data['queueName'] = queueName;
+    }
 
     return data;
   }
@@ -84,21 +125,24 @@ class Printer extends BleDevice {
     bool? isConnected,
     String? vendorId,
     String? productId,
+    String? deviceUri,
+    String? queueName,
     List<String>? services,
     Map<String, Uint8List>? serviceData,
     List<ManufacturerData>? manufacturerDataList,
-  }) =>
-      Printer(
-        address: address ?? this.address,
-        name: name ?? this.name,
-        connectionType: connectionType ?? this.connectionType,
-        isConnected: isConnected ?? this.isConnected,
-        vendorId: vendorId ?? this.vendorId,
-        productId: productId ?? this.productId,
-        services: services ?? this.services,
-        serviceData: serviceData ?? this.serviceData,
-        manufacturerDataList: manufacturerDataList ?? this.manufacturerDataList,
-      );
+  }) => Printer(
+    address: address ?? this.address,
+    name: name ?? this.name,
+    connectionType: connectionType ?? this.connectionType,
+    isConnected: isConnected ?? this.isConnected,
+    vendorId: vendorId ?? this.vendorId,
+    productId: productId ?? this.productId,
+    deviceUri: deviceUri ?? this.deviceUri,
+    queueName: queueName ?? this.queueName,
+    services: services ?? this.services,
+    serviceData: serviceData ?? this.serviceData,
+    manufacturerDataList: manufacturerDataList ?? this.manufacturerDataList,
+  );
 
   /// Carry [previous]'s advertisement data over to [incoming] when [incoming]
   /// has none of its own.
@@ -119,14 +163,16 @@ class Printer extends BleDevice {
     required Printer previous,
     required Printer incoming,
   }) {
-    final hasOwnData = incoming.services.isNotEmpty ||
+    final hasOwnData =
+        incoming.services.isNotEmpty ||
         incoming.serviceData.isNotEmpty ||
         incoming.manufacturerDataList.isNotEmpty;
     if (hasOwnData) {
       return incoming;
     }
 
-    final hasInheritable = previous.services.isNotEmpty ||
+    final hasInheritable =
+        previous.services.isNotEmpty ||
         previous.serviceData.isNotEmpty ||
         previous.manufacturerDataList.isNotEmpty;
     if (!hasInheritable) {
@@ -155,6 +201,9 @@ class Printer extends BleDevice {
 
   /// Check if printer has valid connection data
   bool get hasValidConnectionData {
+    if (isSystemPrinter) {
+      return name?.isNotEmpty ?? false;
+    }
     switch (connectionType) {
       case ConnectionType.USB:
         return vendorId != null && productId != null;
@@ -192,8 +241,4 @@ class Printer extends BleDevice {
 }
 
 /// Enhanced connection type enum
-enum ConnectionType {
-  BLE,
-  USB,
-  NETWORK,
-}
+enum ConnectionType { BLE, USB, NETWORK }

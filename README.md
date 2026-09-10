@@ -58,6 +58,31 @@ getPrinters(
 
 ---
 
+## macOS printer connection types
+
+Installed macOS print queues are classified using their native device URI:
+`usb://` is USB; `dnssd://`, `ipp://`, `ipps://`, `http://`, `https://`,
+`socket://`, `lpd://`, and `smb://` are NETWORK. Unknown or missing schemes
+have a null `connectionType` and display as `UNKNOWN`.
+
+```dart
+await FlutterThermalPrinter.instance.getPrinters(
+  connectionTypes: [ConnectionType.USB, ConnectionType.BLE, ConnectionType.NETWORK],
+);
+```
+
+The default scan includes all three types. An explicit USB-only scan excludes
+network queues; a NETWORK-only scan returns installed network queues on macOS.
+Unknown system queues appear when both USB and NETWORK are requested. This does
+not discover uninstalled LAN printers or identify thermal/ESC/POS compatibility.
+
+`Printer.deviceUri` preserves the destination URI and `Printer.queueName` holds
+the macOS queue ID. System queues continue printing through the native macOS
+backend, including `printWidget`; a Bonjour/IPPS URI is not passed to the raw
+TCP network printer API. The queue's `isConnected` value still indicates that it
+is installed, not that the physical printer is reachable. Other platforms retain
+their existing discovery mechanisms.
+
 ## Bluetooth Services
 
 | Feature                        | Android | iOS | macOS | Windows |
