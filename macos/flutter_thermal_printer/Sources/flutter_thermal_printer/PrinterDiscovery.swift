@@ -14,8 +14,8 @@ enum PrinterDiscovery {
         for index in 0..<CFArrayGetCount(list) {
             // PrintCore stores opaque PMPrinter references in this CFArray.
             let printer = unsafeBitCast(CFArrayGetValueAtIndex(list, index), to: PMPrinter.self)
-            guard let name = PMPrinterGetName(printer)?.takeUnretainedValue(),
-                  let queueName = PMPrinterGetID(printer)?.takeUnretainedValue() else {
+            guard let name = PMPrinterGetName(printer),
+                  let queueName = PMPrinterGetID(printer) else {
                 continue
             }
             var metadata = ["queueName": queueName as String]
