@@ -137,10 +137,12 @@ public class FlutterThermalPrinterPlugin: NSObject, FlutterPlugin  , FlutterStre
         let dataArray = data.map { UInt8($0 & 0xFF) }
         let printData = Data(dataArray)
         
-        return sendDataToPrinter(printer: printer, data: printData)
+        // `path` carries the CUPS queue ID (Printer.address); lp -d needs it, not the display name.
+        let queue = path.isEmpty ? printer.name.replacingOccurrences(of: " ", with: "_") : path
+        return sendDataToPrinter(printer: printer, queue: queue, data: printData)
     }
     
-    private func sendDataToPrinter(printer: NSPrinter, data: Data) -> Bool {
+    private func sendDataToPrinter(printer: NSPrinter, queue: String, data: Data) -> Bool {
         // Create print operation
         let printInfo = NSPrintInfo()
         printInfo.printer = printer
@@ -154,14 +156,14 @@ public class FlutterThermalPrinterPlugin: NSObject, FlutterPlugin  , FlutterStre
         printInfo.isVerticallyCentered = false
         
         // For thermal printers, we'll try multiple approaches to send raw data
-        return printRawDataWithMultipleMethods(printer: printer, data: data)
+        return printRawDataWithMultipleMethods(printer: printer, queue: queue, data: data)
     }
     
-    private func printRawDataWithMultipleMethods(printer: NSPrinter, data: Data) -> Bool {
+    private func printRawDataWithMultipleMethods(printer: NSPrinter, queue: String, data: Data) -> Bool {
         print("Attempting to print \(data.count) bytes to printer: \(printer.name)")
         
         // Use only CUPS method for printing
-        if let success = tryPrintWithCups(printer: printer, data: data) {
+        if let success = tryPrintWithCups(printer: printer, queue: queue, data: data) {
             print("Successfully printed using CUPS method")
             return success
         }
@@ -240,7 +242,7 @@ public class FlutterThermalPrinterPlugin: NSObject, FlutterPlugin  , FlutterStre
         }
     }
     
-    private func tryPrintWithCups(printer: NSPrinter, data: Data) -> Bool? {
+    private func tryPrintWithCups(printer: NSPrinter, queue: String, data: Data) -> Bool? {
         do {
             // Create a temporary file with the print data
             let tempURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("thermal_print_\(UUID().uuidString).bin")
@@ -263,7 +265,7 @@ public class FlutterThermalPrinterPlugin: NSObject, FlutterPlugin  , FlutterStre
                     
                     // Use comprehensive CUPS options for thermal printing
                     process.arguments = [
-                        "-d", printer.name.replacingOccurrences(of: " ", with: "_"),           // Destination printer
+                        "-d", queue,                  // Destination CUPS queue
                         "-o", "raw",                  // Send raw data without processing
                         "-o", "fit-to-page",          // Fit content to page
                         "-o", "media=Custom.80x200mm", // Set paper size for thermal printers
@@ -307,7 +309,7 @@ public class FlutterThermalPrinterPlugin: NSObject, FlutterPlugin  , FlutterStre
                             }
                             
                             // Try with simpler arguments if the first attempt failed
-                            return trySimpleCupsCommand(lpPath: lpPath, printer: printer, tempURL: tempURL, data: data)
+                            return trySimpleCupsCommand(lpPath: lpPath, printer: printer, queue: queue, tempURL: tempURL, data: data)
                         }
                     } catch {
                         print("Error executing \(lpPath): \(error)")
@@ -326,14 +328,14 @@ public class FlutterThermalPrinterPlugin: NSObject, FlutterPlugin  , FlutterStre
         }
     }
     
-    private func trySimpleCupsCommand(lpPath: String, printer: NSPrinter, tempURL: URL, data: Data) -> Bool {
+    private func trySimpleCupsCommand(lpPath: String, printer: NSPrinter, queue: String, tempURL: URL, data: Data) -> Bool {
         print("Trying simplified CUPS command...")
         
         let process = Process()
         process.executableURL = URL(fileURLWithPath: lpPath)
         
         // Use minimal arguments for compatibility
-        process.arguments = ["-d", printer.name, "-o", "raw", tempURL.path]
+        process.arguments = ["-d", queue, "-o", "raw", tempURL.path]
         
         let errorPipe = Pipe()
         let outputPipe = Pipe()
