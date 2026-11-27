@@ -46,8 +46,7 @@ public class FlutterThermalPrinterPlugin implements FlutterPlugin, MethodCallHan
           case "connect": {
               String vendorId = call.argument("vendorId");
               String productId = call.argument("productId");
-              usbPrinter.connect(vendorId, productId);
-              result.success(false  );
+              result.success(usbPrinter.connect(vendorId, productId));
               break;
           }
           case "disconnect": {
