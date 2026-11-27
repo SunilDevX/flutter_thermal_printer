@@ -10,6 +10,7 @@ import android.hardware.usb.UsbConstants;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbEndpoint;
+import android.hardware.usb.UsbInterface;
 import android.hardware.usb.UsbManager;
 import android.os.Build;
 
@@ -178,8 +179,8 @@ public class UsbPrinter implements EventChannel.StreamHandler {
         return m.hasPermission(device);
     }
 
-    //    Print text on the printer
-    public void printText(String vendorId, String productId, List<Integer> bytes) {
+    //    Print text on the printer; returns whether every byte was sent
+    public boolean printText(String vendorId, String productId, List<Integer> bytes) {
         UsbManager m = (UsbManager) context.getSystemService(USB_SERVICE);
         HashMap<String, UsbDevice> usbDevices = m.getDeviceList();
         UsbDevice device = null;
@@ -190,34 +191,67 @@ public class UsbPrinter implements EventChannel.StreamHandler {
             }
         }
         if (device == null) {
-            return;
+            return false;
         }
         if (!m.hasPermission(device)) {
             m.requestPermission(device, mPermissionIntent);
+            return false;
         }
-        if (!m.hasPermission(device)) {
-            return;
-        }
-        UsbDeviceConnection connection = m.openDevice(device);
-
-        if (connection == null) {
-            return;
-        }
-        connection.claimInterface(device.getInterface(0), true);
+        UsbInterface usbInterface = null;
         UsbEndpoint mBulkEndOut = null;
-        for (int i = 0; i < device.getInterface(0).getEndpointCount(); i++) {
-            if (device.getInterface(0).getEndpoint(i).getType() == UsbConstants.USB_ENDPOINT_XFER_BULK && device.getInterface(0).getEndpoint(i).getDirection() == UsbConstants.USB_DIR_OUT) {
-                mBulkEndOut = device.getInterface(0).getEndpoint(i);
-                break;
+        // Not every printer puts its output endpoint on interface 0; prefer the printer-class interface.
+        for (int i = 0; i < device.getInterfaceCount(); i++) {
+            UsbInterface candidate = device.getInterface(i);
+            UsbEndpoint out = findBulkOut(candidate);
+            if (out != null && (mBulkEndOut == null || candidate.getInterfaceClass() == UsbConstants.USB_CLASS_PRINTER)) {
+                usbInterface = candidate;
+                mBulkEndOut = out;
+                if (candidate.getInterfaceClass() == UsbConstants.USB_CLASS_PRINTER) {
+                    break;
+                }
             }
         }
-        byte[] data = new byte[bytes.size()];
-        for (int i = 0; i < bytes.size(); i++) {
-            data[i] = bytes.get(i).byteValue();
+        if (mBulkEndOut == null) {
+            Log.d(TAG, "No bulk OUT endpoint on " + device.getDeviceName());
+            return false;
         }
-        connection.bulkTransfer(mBulkEndOut, data, data.length, 5000);
-        connection.releaseInterface(device.getInterface(0));
-        connection.close();
+        UsbDeviceConnection connection = m.openDevice(device);
+        if (connection == null) {
+            return false;
+        }
+        try {
+            if (!connection.claimInterface(usbInterface, true)) {
+                return false;
+            }
+            byte[] data = new byte[bytes.size()];
+            for (int i = 0; i < bytes.size(); i++) {
+                data[i] = bytes.get(i).byteValue();
+            }
+            // Before Android 9 one bulkTransfer sends at most 16384 bytes and silently drops the rest.
+            int offset = 0;
+            while (offset < data.length) {
+                int sent = connection.bulkTransfer(mBulkEndOut, data, offset, Math.min(16384, data.length - offset), 5000);
+                if (sent <= 0) {
+                    Log.d(TAG, "bulkTransfer failed after " + offset + " of " + data.length + " bytes");
+                    return false;
+                }
+                offset += sent;
+            }
+            return true;
+        } finally {
+            connection.releaseInterface(usbInterface);
+            connection.close();
+        }
+    }
+
+    private static UsbEndpoint findBulkOut(UsbInterface usbInterface) {
+        for (int i = 0; i < usbInterface.getEndpointCount(); i++) {
+            UsbEndpoint endpoint = usbInterface.getEndpoint(i);
+            if (endpoint.getType() == UsbConstants.USB_ENDPOINT_XFER_BULK && endpoint.getDirection() == UsbConstants.USB_DIR_OUT) {
+                return endpoint;
+            }
+        }
+        return null;
     }
 
     public boolean isConnected(String vendorId, String productId) {

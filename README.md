@@ -152,12 +152,12 @@ Customize BLE connection behavior to optimize for different printer models:
 ```dart
 // Global configuration (applies to all BLE connections)
 FlutterThermalPrinter.instance.bleConfig =
-    BleConfig(connectionStabilizationDelay: Duration(seconds: 3));
+    BleConfig(connectionTimeout: Duration(seconds: 3));
 
 // Per-connection override for specific devices
 await FlutterThermalPrinter.instance.connect(
   printer,
-  connectionStabilizationDelay: Duration(seconds: 2),
+  connectionTimeout: Duration(seconds: 2),
 );
 
 // Default behavior (10 seconds) - no configuration needed

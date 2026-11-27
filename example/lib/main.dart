@@ -6,7 +6,6 @@ import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_thermal_printer/flutter_thermal_printer.dart';
-import 'package:flutter_thermal_printer/utils/printer.dart';
 
 void main() {
   runApp(const MyApp());
@@ -52,7 +51,7 @@ class _MyAppState extends State<MyApp> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
       _flutterThermalPrinterPlugin.bleConfig = const BleConfig(
-        connectionStabilizationDelay: Duration(seconds: 3),
+        connectionTimeout: Duration(seconds: 3),
       );
       startScan();
     });
@@ -210,7 +209,6 @@ class _MyAppState extends State<MyApp> {
 
                           await _flutterThermalPrinterPlugin.printWidget(
                             context,
-                            printOnBle: true,
                             cutAfterPrinted: true,
                             printer: printers[index],
                             widget: receiptWidget(

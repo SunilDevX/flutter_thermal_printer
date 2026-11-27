@@ -12,8 +12,9 @@ class MethodChannelFlutterThermalPrinter extends FlutterThermalPrinterPlatform {
 
   @override
   Future<String?> getPlatformVersion() async {
-    final version =
-        await methodChannel.invokeMethod<String>('getPlatformVersion');
+    final version = await methodChannel.invokeMethod<String>(
+      'getPlatformVersion',
+    );
     return version;
   }
 
@@ -23,7 +24,8 @@ class MethodChannelFlutterThermalPrinter extends FlutterThermalPrinterPlatform {
 
   @override
   Future<bool> connect(Printer device) async =>
-      await methodChannel.invokeMethod('connect', device.toJson());
+      await methodChannel.invokeMethod<bool>('connect', device.toJson()) ??
+      false;
 
   @override
   Future<bool> printText(
@@ -31,17 +33,19 @@ class MethodChannelFlutterThermalPrinter extends FlutterThermalPrinterPlatform {
     Uint8List data, {
     String? path,
   }) async =>
-      await methodChannel.invokeMethod('printText', {
+      await methodChannel.invokeMethod<bool>('printText', {
         'vendorId': device.vendorId.toString(),
         'productId': device.productId.toString(),
         'name': device.name,
         'data': List<int>.from(data),
         'path': path ?? '',
-      });
+      }) ??
+      false;
 
   @override
   Future<bool> isConnected(Printer device) async =>
-      await methodChannel.invokeMethod('isConnected', device.toJson());
+      await methodChannel.invokeMethod<bool>('isConnected', device.toJson()) ??
+      false;
 
   @override
   Future<dynamic> convertImageToGrayscale(Uint8List? value) async =>
@@ -51,8 +55,9 @@ class MethodChannelFlutterThermalPrinter extends FlutterThermalPrinterPlatform {
 
   @override
   Future<bool> disconnect(Printer device) async =>
-      await methodChannel.invokeMethod('disconnect', {
+      await methodChannel.invokeMethod<bool>('disconnect', {
         'vendorId': device.vendorId.toString(),
         'productId': device.productId.toString(),
-      });
+      }) ??
+      false;
 }

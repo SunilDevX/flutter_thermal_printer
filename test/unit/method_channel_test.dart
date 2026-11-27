@@ -18,30 +18,30 @@ void main() {
 
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (methodCall) async {
-        log.add(methodCall);
+            log.add(methodCall);
 
-        switch (methodCall.method) {
-          case 'getPlatformVersion':
-            return 'Test Platform 1.0';
-          case 'getUsbDevicesList':
-            return [
-              {'name': 'Printer1', 'vendorId': '123', 'productId': '456'},
-              {'name': 'Printer2', 'vendorId': '789', 'productId': '012'},
-            ];
-          case 'connect':
-            return true;
-          case 'printText':
-            return true;
-          case 'isConnected':
-            return true;
-          case 'convertimage':
-            return [1, 2, 3, 4];
-          case 'disconnect':
-            return true;
-          default:
-            return null;
-        }
-      });
+            switch (methodCall.method) {
+              case 'getPlatformVersion':
+                return 'Test Platform 1.0';
+              case 'getUsbDevicesList':
+                return [
+                  {'name': 'Printer1', 'vendorId': '123', 'productId': '456'},
+                  {'name': 'Printer2', 'vendorId': '789', 'productId': '012'},
+                ];
+              case 'connect':
+                return true;
+              case 'printText':
+                return true;
+              case 'isConnected':
+                return true;
+              case 'convertimage':
+                return [1, 2, 3, 4];
+              case 'disconnect':
+                return true;
+              default:
+                return null;
+            }
+          });
     });
 
     tearDown(() {
@@ -152,6 +152,16 @@ void main() {
         expect(args['path'], '');
       });
 
+      test('treats a null native reply as a failed print', () async {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, (methodCall) async => null);
+
+        expect(
+          await platform.printText(Printer(), Uint8List.fromList([1])),
+          isFalse,
+        );
+      });
+
       test('converts Uint8List to List<int>', () async {
         final printer = Printer();
         final data = Uint8List.fromList([1, 2, 3, 4, 5]);
@@ -166,10 +176,7 @@ void main() {
 
     group('isConnected', () {
       test('invokes isConnected with printer JSON', () async {
-        final printer = Printer(
-          vendorId: '1234',
-          productId: '5678',
-        );
+        final printer = Printer(vendorId: '1234', productId: '5678');
 
         await platform.isConnected(printer);
 
@@ -208,10 +215,7 @@ void main() {
 
     group('disconnect', () {
       test('invokes disconnect with vendorId and productId', () async {
-        final printer = Printer(
-          vendorId: '1234',
-          productId: '5678',
-        );
+        final printer = Printer(vendorId: '1234', productId: '5678');
 
         await platform.disconnect(printer);
 
