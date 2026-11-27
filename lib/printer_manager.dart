@@ -7,8 +7,9 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:universal_ble/universal_ble.dart';
 
-import 'Windows/windows_platform.dart'
-    if (dart.library.html) 'Windows/windows_stub.dart';
+// dart.library.html is false under wasm, so key on ffi instead.
+import 'Windows/windows_stub.dart'
+    if (dart.library.ffi) 'Windows/windows_platform.dart';
 import 'flutter_thermal_printer_platform_interface.dart';
 import 'utils/ble_config.dart';
 import 'utils/printer.dart';
