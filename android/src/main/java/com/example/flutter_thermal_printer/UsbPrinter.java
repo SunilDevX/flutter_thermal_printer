@@ -91,6 +91,10 @@ public class UsbPrinter implements EventChannel.StreamHandler {
             Log.d(TAG, "Device is null.");
             return;
         }
+        // Null once Dart cancels the stream (e.g. stopScan()); nobody is listening.
+        if (events == null) {
+            return;
+        }
         boolean isConnected = isConnected(String.valueOf(device.getVendorId()), String.valueOf(device.getProductId()));
         HashMap<String, Object> deviceData = new HashMap<>();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -143,7 +147,7 @@ public class UsbPrinter implements EventChannel.StreamHandler {
     private Integer requestingPermission = 0;
 
     //    Connect using VendorId and ProductId
-    public void connect(String vendorId, String productId) {
+    public boolean connect(String vendorId, String productId) {
         connectionVendorId = vendorId;
         connectionProductId = productId;
         UsbManager m = (UsbManager) context.getSystemService(Context.USB_SERVICE);
@@ -160,7 +164,7 @@ public class UsbPrinter implements EventChannel.StreamHandler {
 
         if (device == null) {
             Log.d(TAG, "Device not found.");
-            return;
+            return false;
         }
 
         if (!m.hasPermission(device) && requestingPermission <2) {
@@ -171,6 +175,7 @@ public class UsbPrinter implements EventChannel.StreamHandler {
             requestingPermission = 0;
             sendDevice(device); // Proceed directly if permission exists
         }
+        return m.hasPermission(device);
     }
 
     //    Print text on the printer
@@ -259,7 +264,9 @@ public class UsbPrinter implements EventChannel.StreamHandler {
             deviceData.put("vendorId", String.valueOf(device.getVendorId()));
             deviceData.put("productId", String.valueOf(device.getProductId()));
             deviceData.put("connected", m.hasPermission(device));
-            events.success(deviceData);
+            if (events != null) {
+                events.success(deviceData);
+            }
         }
         return true;
     }

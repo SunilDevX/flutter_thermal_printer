@@ -208,10 +208,7 @@ void main() {
       });
 
       test('updates multiple fields', () {
-        final original = Printer(
-          name: 'Original',
-          isConnected: false,
-        );
+        final original = Printer(name: 'Original', isConnected: false);
 
         final copy = original.copyWith(
           name: 'Updated',
@@ -478,10 +475,7 @@ void main() {
     });
 
     test('handles numeric strings', () {
-      final printer = Printer(
-        vendorId: '12345',
-        productId: '67890',
-      );
+      final printer = Printer(vendorId: '12345', productId: '67890');
 
       final json = printer.toJson();
       expect(json['vendorId'], '12345');
@@ -499,6 +493,24 @@ void main() {
       final printer = Printer(name: 'Custom Name', address: 'addr');
       expect(printer.name, 'Custom Name');
     });
+
+    test(
+      'connectionState of USB/network printers follows isConnected',
+      () async {
+        final usb = Printer(
+          address: '1234',
+          connectionType: ConnectionType.USB,
+          isConnected: true,
+        );
+        final network = Printer(
+          address: '10.0.0.5',
+          connectionType: ConnectionType.NETWORK,
+        );
+
+        expect(await usb.connectionState, BleConnectionState.connected);
+        expect(await network.connectionState, BleConnectionState.disconnected);
+      },
+    );
 
     test('copyWith via BleDevice keeps the Printer and sets address', () {
       final BleDevice device = Printer(
