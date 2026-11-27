@@ -59,6 +59,18 @@ class Printer extends BleDevice {
 
   bool get isSystemPrinter => queueName?.isNotEmpty ?? false;
 
+  /// Only BLE printers are known to the BLE stack; USB and network printers
+  /// report [isConnected] instead of querying it with a non-BLE address.
+  @override
+  Future<BleConnectionState> get connectionState =>
+      connectionType == ConnectionType.BLE
+      ? super.connectionState
+      : Future.value(
+          isConnected ?? false
+              ? BleConnectionState.connected
+              : BleConnectionState.disconnected,
+        );
+
   /// Classify a queue's device URI, not the local CUPS server's queue URL.
   /// Unknown schemes (including classic Bluetooth) are not assumed to be BLE.
   static ConnectionType? connectionTypeFromDeviceUri(String? deviceUri) {
