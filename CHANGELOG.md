@@ -1,3 +1,14 @@
+## 3.0.0
+
+**Breaking:** this release moves to `universal_ble` 3.x, which this package re-exports. If your app uses `universal_ble` types directly, check its [3.0.0 changelog](https://pub.dev/packages/universal_ble/changelog). In particular, BLE device IDs (Android MAC addresses) are now lower-case, so compare them case-insensitively or re-save any stored IDs.
+
+* Updated `universal_ble` to `^3.0.0`. `Printer.copyWith` now also accepts `deviceId` to match `BleDevice.copyWith`.
+* Fixed `connectionState` for USB and network printers. It now follows `isConnected` instead of asking the BLE stack about a non-BLE address.
+* Fixed web builds with `--wasm`. The Windows-only code is now selected with `dart.library.ffi` instead of `dart.library.html`.
+* Fixed an Android crash on the second USB connect after `stopScan()`. `connect` now returns whether the app has permission for the device instead of always `true`.
+* Fixed macOS printing failing with "/usr/bin/lp: No such file or directory". Jobs are now sent to the CUPS queue ID instead of the printer's display name.
+* Fixed the macOS build with the macOS 27 SDK while still building with older Xcode versions. Thanks to `@yahya-sh` for PR #55.
+
 ## 2.3.0
 
 * Classify installed macOS printers from their native device URI as USB, NETWORK, or unknown, instead of labeling every print queue as USB.
