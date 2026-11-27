@@ -16,7 +16,7 @@ dependencies:
   image: ^4.9.2
   plugin_platform_interface: ^2.1.8
   screenshot: ^3.0.0
-  universal_ble: ^2.1.1
+  universal_ble: ^3.0.0
   win32: ^6.4.0
 
 dev_dependencies:

@@ -118,7 +118,12 @@ class Printer extends BleDevice {
   /// Advertisement data ([services], [serviceData], [manufacturerDataList]) is
   /// carried over unless explicitly overridden, so connection-state updates do
   /// not discard what the scan reported.
+  ///
+  /// [deviceId] is accepted so this is a valid override of
+  /// `BleDevice.copyWith`; for a [Printer] it is the same as [address].
+  @override
   Printer copyWith({
+    String? deviceId,
     String? address,
     String? name,
     ConnectionType? connectionType,
@@ -131,7 +136,7 @@ class Printer extends BleDevice {
     Map<String, Uint8List>? serviceData,
     List<ManufacturerData>? manufacturerDataList,
   }) => Printer(
-    address: address ?? this.address,
+    address: address ?? deviceId ?? this.address,
     name: name ?? this.name,
     connectionType: connectionType ?? this.connectionType,
     isConnected: isConnected ?? this.isConnected,

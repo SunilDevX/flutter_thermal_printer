@@ -499,6 +499,22 @@ void main() {
       final printer = Printer(name: 'Custom Name', address: 'addr');
       expect(printer.name, 'Custom Name');
     });
+
+    test('copyWith via BleDevice keeps the Printer and sets address', () {
+      final BleDevice device = Printer(
+        address: 'old',
+        name: 'P',
+        connectionType: ConnectionType.BLE,
+      );
+
+      final copy = device.copyWith(deviceId: 'new');
+
+      expect(copy, isA<Printer>());
+      expect((copy as Printer).address, 'new');
+      expect(copy.deviceId, 'new');
+      expect(copy.connectionType, ConnectionType.BLE);
+      expect(device.copyWith().deviceId, 'old');
+    });
   });
 
   group('advertisement data', () {
