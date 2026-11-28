@@ -7,6 +7,7 @@
 * Renamed `connectionStabilizationDelay` to `connectionTimeout`; old name still works.
 * Removed the unused `printOnBle` parameter from `printWidget`.
 * Requires `universal_ble` 3.4.2; Bluetooth device IDs are now lower-case.
+* `getPrinters()` throws when Bluetooth permission is denied or unsupported.
 
 **Fixes**
 
@@ -20,10 +21,16 @@
 * macOS: builds with the macOS 27 SDK. Thanks `@yahya-sh`!
 * Web: apps using this package now build with `--wasm`.
 * USB and network printers now report the correct `connectionState`.
+* Bluetooth printers that go out of range leave the list.
+* Bluetooth `connect()` no longer reports connected printers as failed.
+* Bluetooth printing works on printers that reject MTU requests.
+* Bluetooth scanning no longer re-sends the list on every advertisement.
+* `isBleTurnedOnStream` emits the current state immediately, then each change.
 
 **Improvements**
 
 * `Printer` is now exported from the main package import.
+* Bluetooth prints start faster after the first one.
 
 ## 2.3.0
 
