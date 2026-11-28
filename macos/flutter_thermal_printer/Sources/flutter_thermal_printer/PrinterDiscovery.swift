@@ -24,6 +24,10 @@ enum PrinterDiscovery {
                let uri = unmanagedURI?.takeRetainedValue() {
                 metadata["deviceUri"] = (uri as URL).absoluteString
             }
+            var state = PMPrinterState(kPMPrinterIdle)
+            if PMPrinterGetState(printer, &state) == noErr {
+                metadata["state"] = String(state)
+            }
             result[name] = metadata
         }
         return result

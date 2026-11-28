@@ -38,17 +38,18 @@ public class FlutterThermalPrinterPlugin: NSObject, FlutterPlugin  , FlutterStre
             result(getAllPrinters()) // Changed from getAllUsbDevice() to getAllPrinters()
         case "connect":
             let args = call.arguments as? [String: Any]
-            let printerName = args?["name"] as? String // Using vendorId field to pass printer name for compatibility
-            let printerId = args?["productId"] as? String // Using productId field to pass printer ID for compatibility
-            result(connectPrinter(printerName: printerName!, printerId: printerId!))
+            let printerName = args?["name"] as? String ?? ""
+            let printerId = args?["productId"] as? String ?? ""
+            result(connectPrinter(printerName: printerName, printerId: printerId))
         case "printText":
             let args = call.arguments as? [String: Any]
             let printerName = args?["name"] as? String ?? ""
             let printerId = args?["productId"] as? String ?? ""
             let data = args?["data"] as? Array<Int> ??  []
             let path = args?["path"] as? String ?? ""
-            let success = printData(printerName: printerName, printerId: printerId, data: data, path: path)
-            result(success)
+            printData(printerName: printerName, printerId: printerId, data: data, path: path) { success in
+                result(success)
+            }
         case "isConnected":
             let args = call.arguments as? [String: Any]
             let printerName = args?["name"] as? String ?? ""
@@ -115,10 +116,11 @@ public class FlutterThermalPrinterPlugin: NSObject, FlutterPlugin  , FlutterStre
     // MARK: - Printer Connection and Printing Methods
     
     public func connectPrinter(printerName: String, printerId: String) -> Bool {
-        // Check if printer exists and is available 
-        let availablePrinters = NSPrinter.printerNames
-        let isConnected = availablePrinters.contains(printerName)
-        return isConnected
+        guard NSPrinter.printerNames.contains(printerName) else {
+            return false
+        }
+        // A stopped queue (paused, or halted after an error) holds jobs instead of printing them.
+        return PrinterDiscovery.metadataByName()[printerName]?["state"] != String(kPMPrinterStopped)
     }
     
     public func disconnectPrinter(printerName: String, printerId: String) -> Bool {
@@ -127,36 +129,24 @@ public class FlutterThermalPrinterPlugin: NSObject, FlutterPlugin  , FlutterStre
         return true
     }
     
-    public func printData(printerName: String, printerId: String, data: Array<Int>, path: String) -> Bool {
+    /// Calls [completion] on the main thread.
+    public func printData(printerName: String, printerId: String, data: Array<Int>, path: String, completion: @escaping (Bool) -> Void) {
         guard let printer = NSPrinter(name: printerName) else {
             print("Printer not found: \(printerName)")
-            return false
+            completion(false)
+            return
         }
-        
-        // Convert Int array to Data
-        let dataArray = data.map { UInt8($0 & 0xFF) }
-        let printData = Data(dataArray)
-        
         // `path` carries the CUPS queue ID (Printer.address); lp -d needs it, not the display name.
         let queue = path.isEmpty ? printer.name.replacingOccurrences(of: " ", with: "_") : path
-        return sendDataToPrinter(printer: printer, queue: queue, data: printData)
-    }
-    
-    private func sendDataToPrinter(printer: NSPrinter, queue: String, data: Data) -> Bool {
-        // Create print operation
-        let printInfo = NSPrintInfo()
-        printInfo.printer = printer
-        printInfo.paperSize = NSMakeSize(288, 3276) // 80mm thermal paper width (288 points), flexible height
-        printInfo.topMargin = 0
-        printInfo.bottomMargin = 0
-        printInfo.leftMargin = 0
-        printInfo.rightMargin = 0
-        printInfo.orientation = .portrait
-        printInfo.isHorizontallyCentered = false
-        printInfo.isVerticallyCentered = false
-        
-        // For thermal printers, we'll try multiple approaches to send raw data
-        return printRawDataWithMultipleMethods(printer: printer, queue: queue, data: data)
+
+        // lp blocks until the job is spooled, so keep it off the main thread.
+        DispatchQueue.global(qos: .userInitiated).async {
+            let printData = Data(data.map { UInt8($0 & 0xFF) })
+            let success = self.printRawDataWithMultipleMethods(printer: printer, queue: queue, data: printData)
+            DispatchQueue.main.async {
+                completion(success)
+            }
+        }
     }
     
     private func printRawDataWithMultipleMethods(printer: NSPrinter, queue: String, data: Data) -> Bool {
