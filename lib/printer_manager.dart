@@ -44,6 +44,15 @@ class PrinterManager {
   bool _isBleStateSyncInProgress = false;
   static const Duration _bleStateSyncInterval = Duration(seconds: 3);
 
+  /// A disconnected BLE printer unseen for this many syncs (~30 s) is dropped.
+  static const int _bleMaxMissedSyncs = 10;
+  final Map<String, int> _bleMissedSyncs = {};
+
+  /// Write characteristic and chunk size per connected BLE printer, so they
+  /// are negotiated once per connection instead of on every print.
+  final Map<String, ({BleCharacteristic characteristic, int chunkSize})>
+  _bleWriteTargets = {};
+
   static const String _channelName = 'flutter_thermal_printer/events';
   final EventChannel _eventChannel = const EventChannel(_channelName);
 
@@ -128,46 +137,18 @@ class PrinterManager {
           log('Device ${device.name} is already connected');
           return true;
         }
-        final connectionCompleter = Completer<bool>();
-        log('Connecting to BLE device ${device.name} at ${device.address}');
-
-        StreamSubscription? subscription;
-
-        try {
-          // Listen to global connection changes
-          subscription = device.connectionStream.listen((state) {
-            log('Connection state changed for device ${device.name}: $state');
-            if (state) {
-              if (!connectionCompleter.isCompleted) {
-                connectionCompleter.complete(true);
-              }
-            }
-          });
-
-          await device.connect();
-          final timeout =
+        log('Connecting to BLE device ${device.name} at $address');
+        // stopScan() cancels the listener that would have cleared this.
+        _bleWriteTargets.remove(address);
+        // Completes once connected; throws on failure or timeout.
+        await device.connect(
+          timeout:
               connectionTimeout ??
               connectionStabilizationDelay ??
-              bleConfig.connectionTimeout;
-          final connected = await connectionCompleter.future.timeout(
-            timeout,
-            onTimeout: () {
-              log('Connection to device ${device.name} timed out');
-              return false;
-            },
-          );
-          _updateBleConnectionState(
-            address,
-            connected,
-            fallbackName: device.name,
-          );
-          return connected;
-        } catch (e) {
-          log('Error connecting to device: $e');
-          return false;
-        } finally {
-          await subscription?.cancel();
-        }
+              bleConfig.connectionTimeout,
+        );
+        _updateBleConnectionState(address, true, fallbackName: device.name);
+        return true;
       } catch (e) {
         log('Failed to connect to BLE device: $e');
         return false;
@@ -205,6 +186,7 @@ class PrinterManager {
     if (device.connectionType == ConnectionType.BLE) {
       try {
         if (device.address != null) {
+          _bleWriteTargets.remove(device.address);
           await device.disconnect();
           _updateBleConnectionState(
             device.address!,
@@ -285,31 +267,12 @@ class PrinterManager {
       }
     } else if (printer.connectionType == ConnectionType.BLE) {
       try {
-        final services = await printer.discoverServices();
-
-        BleCharacteristic? writeCharacteristic;
-        for (final service in services) {
-          for (final characteristic in service.characteristics) {
-            if (characteristic.properties.contains(
-              CharacteristicProperty.write,
-            )) {
-              writeCharacteristic = characteristic;
-              break;
-            }
-          }
-        }
-
-        if (writeCharacteristic == null) {
+        final target = await _bleWriteTarget(printer);
+        if (target == null) {
           log('No write characteristic found');
           return false;
         }
-        // An ATT write carries at most MTU - 3 bytes.
-        final maxChunkSize =
-            chunkSize ??
-            (Platform.isWindows
-                    ? 50
-                    : await printer.requestMtu(Platform.isMacOS ? 150 : 500)) -
-                3;
+        final maxChunkSize = chunkSize ?? target.chunkSize;
 
         for (var i = 0; i < bytes.length; i += maxChunkSize) {
           final chunk = bytes.sublist(
@@ -317,7 +280,7 @@ class PrinterManager {
             i + maxChunkSize > bytes.length ? bytes.length : i + maxChunkSize,
           );
 
-          await writeCharacteristic.write(Uint8List.fromList(chunk));
+          await target.characteristic.write(Uint8List.fromList(chunk));
 
           // Small delay between chunks to avoid overwhelming the device
           if (longData) {
@@ -326,6 +289,8 @@ class PrinterManager {
         }
         return true;
       } catch (e) {
+        // Negotiate again next time in case the connection changed under us.
+        _bleWriteTargets.remove(printer.address);
         log('Failed to print data to device $e');
         return false;
       }
@@ -333,6 +298,48 @@ class PrinterManager {
     // Raw IP printers go through FlutterThermalPrinterNetwork instead.
     log('printData does not support ${printer.connectionTypeString} printers');
     return false;
+  }
+
+  Future<({BleCharacteristic characteristic, int chunkSize})?> _bleWriteTarget(
+    Printer printer,
+  ) async {
+    final address = printer.address!;
+    final cached = _bleWriteTargets[address];
+    if (cached != null) {
+      return cached;
+    }
+    final services = await printer.discoverServices();
+
+    BleCharacteristic? writeCharacteristic;
+    for (final service in services) {
+      for (final characteristic in service.characteristics) {
+        if (characteristic.properties.contains(CharacteristicProperty.write)) {
+          writeCharacteristic = characteristic;
+          break;
+        }
+      }
+    }
+    if (writeCharacteristic == null) {
+      return null;
+    }
+
+    // An ATT write carries at most MTU - 3 bytes; 23 is the BLE minimum MTU.
+    var mtu = 23;
+    if (Platform.isWindows) {
+      mtu = 53;
+    } else {
+      try {
+        mtu = await printer.requestMtu(Platform.isMacOS ? 150 : 500);
+      } catch (e) {
+        log('MTU request failed, using 20-byte writes: $e');
+      }
+    }
+    // The connection listener drops this entry when the printer disconnects.
+    _ensureBleConnectionListener(address, fallbackName: printer.name);
+    return _bleWriteTargets[address] = (
+      characteristic: writeCharacteristic,
+      chunkSize: mtu - 3,
+    );
   }
 
   /// Discover BLE and USB printers, plus installed network queues on macOS.
@@ -527,14 +534,23 @@ class PrinterManager {
 
       // Check bluetooth availability
       final availability = await UniversalBle.getBluetoothAvailabilityState();
-      if (availability != AvailabilityState.poweredOn) {
-        log('Bluetooth is not powered on. Current state: $availability');
-        if (availability == AvailabilityState.poweredOff) {
+      switch (availability) {
+        case AvailabilityState.poweredOff:
           throw Exception('Bluetooth is turned off. Please enable Bluetooth.');
-        }
-        return;
+        case AvailabilityState.unauthorized:
+          throw Exception('Bluetooth permission is not granted.');
+        case AvailabilityState.unsupported:
+          throw Exception('Bluetooth LE is not supported on this device.');
+        case AvailabilityState.poweredOn:
+          break;
+        // Transient states: let the scan start, or fail with the real cause.
+        case AvailabilityState.unknown:
+        case AvailabilityState.resetting:
+          log('Bluetooth state is $availability; scanning anyway');
       }
 
+      // A new scan gives every listed printer a fresh ~30 s to be seen.
+      _bleMissedSyncs.clear();
       await _syncBleDevicesAndConnectionState();
       _startBleStateSync();
 
@@ -557,9 +573,12 @@ class PrinterManager {
       _bleSubscription = UniversalBle.scanStream.listen(
         (scanResult) async {
           if (scanResult.name?.isNotEmpty ?? false) {
-            final isConnected = await _isBleDeviceConnected(
-              scanResult.deviceId,
-            );
+            _bleMissedSyncs.remove(scanResult.deviceId);
+            // Printers already listed get their state from the connection
+            // listener; only ask the platform about new ones.
+            final isConnected =
+                _findBlePrinter(scanResult.deviceId)?.isConnected ??
+                await _isBleDeviceConnected(scanResult.deviceId);
             _updateOrAddPrinter(
               Printer(
                 address: scanResult.deviceId,
@@ -590,13 +609,20 @@ class PrinterManager {
           device.connectionType == printer.connectionType &&
           device.address == printer.address,
     );
+    var changed = true;
     if (index == -1) {
       _devices.add(printer);
     } else {
+      final previous = _devices[index];
+      changed =
+          previous.name != printer.name ||
+          previous.isConnected != printer.isConnected ||
+          previous.vendorId != printer.vendorId ||
+          previous.productId != printer.productId;
       // System-device and connection-state records carry no advertisement
       // payload, so keep the one the scan already resolved for this device.
       _devices[index] = Printer.mergeAdvertisementData(
-        previous: _devices[index],
+        previous: previous,
         incoming: printer,
       );
     }
@@ -607,7 +633,21 @@ class PrinterManager {
         fallbackName: printer.name,
       );
     }
-    sortDevices();
+    // Repeated advertisements would otherwise re-emit the list many times a
+    // second per printer.
+    if (changed) {
+      sortDevices();
+    }
+  }
+
+  Printer? _findBlePrinter(String deviceId) {
+    for (final device in _devices) {
+      if (device.connectionType == ConnectionType.BLE &&
+          device.address == deviceId) {
+        return device;
+      }
+    }
+    return null;
   }
 
   Future<bool> _isBleDeviceConnected(String deviceId) async {
@@ -620,7 +660,7 @@ class PrinterManager {
     }
   }
 
-  Future<void> _syncBleDevicesAndConnectionState() async {
+  Future<void> _syncBleDevicesAndConnectionState({bool prune = false}) async {
     if (_isBleStateSyncInProgress) {
       return;
     }
@@ -628,9 +668,45 @@ class PrinterManager {
     try {
       await _syncSystemBleDevices();
       await _syncKnownBleConnectionStates();
+      if (prune) {
+        _pruneUnseenBlePrinters();
+      }
     } finally {
       _isBleStateSyncInProgress = false;
     }
+  }
+
+  /// Drops disconnected BLE printers that stopped advertising, such as ones
+  /// that went out of range or were switched off.
+  void _pruneUnseenBlePrinters() {
+    final stale = <String>{};
+    for (final device in _devices) {
+      final address = device.address;
+      if (device.connectionType != ConnectionType.BLE || address == null) {
+        continue;
+      }
+      // A connected printer stops advertising, so it is never stale.
+      final missed = device.isConnected == true
+          ? 0
+          : (_bleMissedSyncs[address] ?? 0) + 1;
+      _bleMissedSyncs[address] = missed;
+      if (missed > _bleMaxMissedSyncs) {
+        stale.add(address);
+      }
+    }
+    if (stale.isEmpty) {
+      return;
+    }
+    _devices.removeWhere(
+      (device) =>
+          device.connectionType == ConnectionType.BLE &&
+          stale.contains(device.address),
+    );
+    for (final address in stale) {
+      _bleMissedSyncs.remove(address);
+      unawaited(_bleConnectionSubscriptions.remove(address)?.cancel());
+    }
+    sortDevices();
   }
 
   Future<void> _syncSystemBleDevices() async {
@@ -641,6 +717,7 @@ class PrinterManager {
         if (deviceId.isEmpty) {
           continue;
         }
+        _bleMissedSyncs.remove(deviceId);
         final deviceName = _normalizeDeviceName(device.name);
         final isConnected = await _isBleDeviceConnected(deviceId);
         _updateOrAddPrinter(
@@ -677,7 +754,7 @@ class PrinterManager {
   void _startBleStateSync() {
     _bleStateSyncTimer?.cancel();
     _bleStateSyncTimer = Timer.periodic(_bleStateSyncInterval, (_) {
-      unawaited(_syncBleDevicesAndConnectionState());
+      unawaited(_syncBleDevicesAndConnectionState(prune: true));
     });
   }
 
@@ -716,6 +793,10 @@ class PrinterManager {
     bool isConnected, {
     String? fallbackName,
   }) {
+    if (!isConnected) {
+      // MTU and services must be negotiated again on the next connection.
+      _bleWriteTargets.remove(deviceId);
+    }
     final index = _devices.indexWhere(
       (device) =>
           device.connectionType == ConnectionType.BLE &&
@@ -804,12 +885,15 @@ class PrinterManager {
     }
   }
 
-  /// Stream to monitor Bluetooth state
-  Stream<bool> get isBleTurnedOnStream =>
-      Stream.periodic(const Duration(seconds: 5), (_) async {
-        final state = await UniversalBle.getBluetoothAvailabilityState();
-        return state == AvailabilityState.poweredOn;
-      }).asyncMap((event) => event).distinct();
+  /// Whether Bluetooth is on: the current state first, then every change.
+  Stream<bool> get isBleTurnedOnStream => _bleTurnedOnStates().distinct();
+
+  Stream<bool> _bleTurnedOnStates() async* {
+    yield await isBleTurnedOn();
+    yield* UniversalBle.availabilityStream
+        .map((state) => state == AvailabilityState.poweredOn)
+        .handleError((Object e) => log('Bluetooth state stream error: $e'));
+  }
 
   /// Check if Bluetooth is turned on
   Future<bool> isBleTurnedOn() async {
