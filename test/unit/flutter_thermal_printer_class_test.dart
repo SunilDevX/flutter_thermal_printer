@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_thermal_printer/flutter_thermal_printer.dart';
 import 'package:flutter_thermal_printer/flutter_thermal_printer_platform_interface.dart';
-import 'package:flutter_thermal_printer/utils/printer.dart';
 
 import '../mocks/mock_platform.dart';
 
@@ -107,23 +106,18 @@ void main() {
     group('bleConfig', () {
       test('has default config with 10 second delay', () {
         final config = FlutterThermalPrinter.instance.bleConfig;
-        expect(
-          config.connectionStabilizationDelay,
-          const Duration(seconds: 10),
-        );
+        expect(config.connectionTimeout, const Duration(seconds: 10));
       });
 
       test('bleConfig setter updates the configuration', () {
         final originalConfig = FlutterThermalPrinter.instance.bleConfig;
 
-        FlutterThermalPrinter.instance.bleConfig =
-            const BleConfig(connectionStabilizationDelay: Duration(seconds: 5));
+        FlutterThermalPrinter.instance.bleConfig = const BleConfig(
+          connectionTimeout: Duration(seconds: 5),
+        );
 
         final newConfig = FlutterThermalPrinter.instance.bleConfig;
-        expect(
-          newConfig.connectionStabilizationDelay,
-          const Duration(seconds: 5),
-        );
+        expect(newConfig.connectionTimeout, const Duration(seconds: 5));
 
         FlutterThermalPrinter.instance.bleConfig = originalConfig;
       });
@@ -131,10 +125,7 @@ void main() {
       test('bleConfig getter returns current config', () {
         final config1 = FlutterThermalPrinter.instance.bleConfig;
         final config2 = FlutterThermalPrinter.instance.bleConfig;
-        expect(
-          config1.connectionStabilizationDelay,
-          config2.connectionStabilizationDelay,
-        );
+        expect(config1.connectionTimeout, config2.connectionTimeout);
       });
     });
   });
@@ -183,7 +174,7 @@ void main() {
     test('BleConfig is exported', () {
       const config = BleConfig();
       expect(config, isNotNull);
-      expect(config.connectionStabilizationDelay, const Duration(seconds: 10));
+      expect(config.connectionTimeout, const Duration(seconds: 10));
     });
   });
 }

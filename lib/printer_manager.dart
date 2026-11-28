@@ -97,10 +97,12 @@ class PrinterManager {
   /// Connect to a printer device
   ///
   /// [device] The printer device to connect to.
-  /// [connectionStabilizationDelay] Optional delay to wait after connection is established
-  /// before considering it stable. Defaults to [BleConfig.connectionStabilizationDelay].
+  /// [connectionTimeout] How long to wait for a BLE printer to connect.
+  /// Defaults to [BleConfig.connectionTimeout].
   Future<bool> connect(
     Printer device, {
+    Duration? connectionTimeout,
+    @Deprecated('Use connectionTimeout instead.')
     Duration? connectionStabilizationDelay,
   }) async {
     if (_usesMacOSQueue(device) ||
@@ -143,11 +145,12 @@ class PrinterManager {
           });
 
           await device.connect();
-          final delay =
+          final timeout =
+              connectionTimeout ??
               connectionStabilizationDelay ??
-              bleConfig.connectionStabilizationDelay;
+              bleConfig.connectionTimeout;
           final connected = await connectionCompleter.future.timeout(
-            delay,
+            timeout,
             onTimeout: () {
               log('Connection to device ${device.name} timed out');
               return false;
@@ -214,41 +217,42 @@ class PrinterManager {
         log('Failed to disconnect device: $e');
       }
     }
-
-    ///
-    /// [printer] The printer device to print to.
-    /// [bytes] The raw bytes to print.
-    /// [longData] Whether the data is long and should be split into chunks.
-    /// [chunkSize] The size of each chunk if [longData] is true.
     // USB devices don't need explicit disconnection
   }
 
-  /// Print data to printer device
-  Future<void> printData(
+  /// Sends [bytes] to [printer] and returns whether all of them were handed
+  /// to the printer. Failures are logged, not thrown.
+  ///
+  /// [longData] adds a 10 ms pause between BLE writes.
+  /// [chunkSize] is the number of bytes per BLE write; it defaults to the
+  /// negotiated MTU minus 3. Values below 1 throw an [ArgumentError].
+  Future<bool> printData(
     Printer printer,
     List<int> bytes, {
     bool longData = false,
     int? chunkSize,
   }) async {
+    if (chunkSize != null && chunkSize < 1) {
+      throw ArgumentError.value(chunkSize, 'chunkSize', 'must be at least 1');
+    }
     if (_usesMacOSQueue(printer) ||
         printer.connectionType == ConnectionType.USB) {
       if (Platform.isWindows) {
         // Windows USB printing using Win32 API
-        using((alloc) {
-          RawPrinter(printer.name!, alloc).printEscPosWin32(bytes);
-        });
-        return;
-      } else {
-        // Non-Windows USB printing
-        try {
-          await FlutterThermalPrinterPlatform.instance.printText(
-            printer,
-            Uint8List.fromList(bytes),
-            path: printer.address,
-          );
-        } catch (e) {
-          log('FlutterThermalPrinter: Unable to Print Data $e');
-        }
+        return using(
+          (alloc) => RawPrinter(printer.name!, alloc).printEscPosWin32(bytes),
+        );
+      }
+      // Non-Windows USB printing
+      try {
+        return await FlutterThermalPrinterPlatform.instance.printText(
+          printer,
+          Uint8List.fromList(bytes),
+          path: printer.address,
+        );
+      } catch (e) {
+        log('FlutterThermalPrinter: Unable to Print Data $e');
+        return false;
       }
     } else if (printer.connectionType == ConnectionType.BLE) {
       try {
@@ -268,14 +272,15 @@ class PrinterManager {
 
         if (writeCharacteristic == null) {
           log('No write characteristic found');
-          return;
+          return false;
         }
-        final mtu =
+        // An ATT write carries at most MTU - 3 bytes.
+        final maxChunkSize =
             chunkSize ??
             (Platform.isWindows
-                ? 50
-                : await printer.requestMtu(Platform.isMacOS ? 150 : 500));
-        final maxChunkSize = mtu - 3;
+                    ? 50
+                    : await printer.requestMtu(Platform.isMacOS ? 150 : 500)) -
+                3;
 
         for (var i = 0; i < bytes.length; i += maxChunkSize) {
           final chunk = bytes.sublist(
@@ -289,17 +294,16 @@ class PrinterManager {
           if (longData) {
             await Future.delayed(const Duration(milliseconds: 10));
           }
-
-          ///
-          /// [refreshDuration] The duration between each scan refresh.
-          /// [connectionTypes] List of connection types to scan for (BLE, USB).
-          /// [androidUsesFineLocation] Whether to use fine location on Android for BLE scanning.
         }
-        return;
+        return true;
       } catch (e) {
         log('Failed to print data to device $e');
+        return false;
       }
     }
+    // Raw IP printers go through FlutterThermalPrinterNetwork instead.
+    log('printData does not support ${printer.connectionTypeString} printers');
+    return false;
   }
 
   /// Discover BLE and USB printers, plus installed network queues on macOS.

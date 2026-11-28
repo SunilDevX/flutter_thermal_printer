@@ -63,9 +63,10 @@ class MockFlutterThermalPrinterPlatform extends FlutterThermalPrinterPlatform
   }
 
   @override
-  Future<void> printText(Printer device, Uint8List data, {String? path}) async {
+  Future<bool> printText(Printer device, Uint8List data, {String? path}) async {
     methodCalls.add('printText');
     methodArguments.add({'device': device, 'data': data, 'path': path});
+    return printTextResult;
   }
 
   @override

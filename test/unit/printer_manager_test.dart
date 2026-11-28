@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_thermal_printer/flutter_thermal_printer_platform_interface.dart';
@@ -88,9 +89,7 @@ void main() {
 
     group('connect', () {
       test('returns false for BLE device with null address', () async {
-        final printer = Printer(
-          connectionType: ConnectionType.BLE,
-        );
+        final printer = Printer(connectionType: ConnectionType.BLE);
 
         final result = await PrinterManager.instance.connect(printer);
         expect(result, false);
@@ -106,9 +105,7 @@ void main() {
 
     group('isConnected', () {
       test('returns false for BLE device with null address', () async {
-        final printer = Printer(
-          connectionType: ConnectionType.BLE,
-        );
+        final printer = Printer(connectionType: ConnectionType.BLE);
 
         final result = await PrinterManager.instance.isConnected(printer);
         expect(result, false);
@@ -124,9 +121,7 @@ void main() {
 
     group('disconnect', () {
       test('handles BLE device with null address gracefully', () async {
-        final printer = Printer(
-          connectionType: ConnectionType.BLE,
-        );
+        final printer = Printer(connectionType: ConnectionType.BLE);
 
         await PrinterManager.instance.disconnect(printer);
       });
@@ -171,23 +166,18 @@ void main() {
     group('bleConfig', () {
       test('has default config with 10 second delay', () {
         final config = PrinterManager.instance.bleConfig;
-        expect(
-          config.connectionStabilizationDelay,
-          const Duration(seconds: 10),
-        );
+        expect(config.connectionTimeout, const Duration(seconds: 10));
       });
 
       test('bleConfig setter updates the configuration', () {
         final originalConfig = PrinterManager.instance.bleConfig;
 
-        PrinterManager.instance.bleConfig =
-            const BleConfig(connectionStabilizationDelay: Duration(seconds: 3));
+        PrinterManager.instance.bleConfig = const BleConfig(
+          connectionTimeout: Duration(seconds: 3),
+        );
 
         final newConfig = PrinterManager.instance.bleConfig;
-        expect(
-          newConfig.connectionStabilizationDelay,
-          const Duration(seconds: 3),
-        );
+        expect(newConfig.connectionTimeout, const Duration(seconds: 3));
 
         PrinterManager.instance.bleConfig = originalConfig;
       });
@@ -195,28 +185,69 @@ void main() {
       test('bleConfig getter returns current config', () {
         final config1 = PrinterManager.instance.bleConfig;
         final config2 = PrinterManager.instance.bleConfig;
-        expect(
-          config1.connectionStabilizationDelay,
-          config2.connectionStabilizationDelay,
-        );
+        expect(config1.connectionTimeout, config2.connectionTimeout);
       });
 
       test('config changes persist across accesses', () {
         final originalConfig = PrinterManager.instance.bleConfig;
 
-        PrinterManager.instance.bleConfig =
-            const BleConfig(connectionStabilizationDelay: Duration(seconds: 7));
+        PrinterManager.instance.bleConfig = const BleConfig(
+          connectionTimeout: Duration(seconds: 7),
+        );
 
         expect(
-          PrinterManager.instance.bleConfig.connectionStabilizationDelay,
+          PrinterManager.instance.bleConfig.connectionTimeout,
           const Duration(seconds: 7),
         );
         expect(
-          PrinterManager.instance.bleConfig.connectionStabilizationDelay,
+          PrinterManager.instance.bleConfig.connectionTimeout,
           const Duration(seconds: 7),
         );
 
         PrinterManager.instance.bleConfig = originalConfig;
+      });
+    });
+
+    group('printData', () {
+      final usbPrinter = Printer(
+        address: '1234',
+        name: 'USB Printer',
+        connectionType: ConnectionType.USB,
+        vendorId: '1234',
+        productId: '5678',
+      );
+
+      test('returns the native USB result', () async {
+        expect(
+          await PrinterManager.instance.printData(usbPrinter, [1]),
+          isTrue,
+        );
+        mockPlatform.printTextResult = false;
+        expect(
+          await PrinterManager.instance.printData(usbPrinter, [1]),
+          isFalse,
+        );
+      }, skip: Platform.isWindows);
+
+      test('returns false for printers it cannot print to', () async {
+        final networkPrinter = Printer(
+          address: '192.0.2.1',
+          name: 'LAN Printer',
+          connectionType: ConnectionType.NETWORK,
+        );
+        expect(
+          await PrinterManager.instance.printData(networkPrinter, [1]),
+          isFalse,
+        );
+        expect(mockPlatform.methodCalls, isEmpty);
+      });
+
+      test('rejects a chunkSize below 1', () {
+        expect(
+          () =>
+              PrinterManager.instance.printData(usbPrinter, [1], chunkSize: 0),
+          throwsArgumentError,
+        );
       });
     });
   });

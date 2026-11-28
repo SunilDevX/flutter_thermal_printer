@@ -17,7 +17,7 @@ class PrinterNames {
 class RawPrinter {
   RawPrinter(String _, __);
 
-  void printEscPosWin32(List<int> data) {
+  bool printEscPosWin32(List<int> data) {
     throw UnsupportedError(
       'Windows printing is not supported on this platform',
     );

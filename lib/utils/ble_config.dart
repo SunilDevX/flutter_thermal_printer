@@ -1,19 +1,30 @@
 class BleConfig {
   const BleConfig({
-    this.connectionStabilizationDelay = const Duration(seconds: 10),
-  });
+    Duration? connectionTimeout,
+    @Deprecated('Use connectionTimeout instead.')
+    Duration? connectionStabilizationDelay,
+  }) : connectionTimeout =
+           connectionTimeout ??
+           connectionStabilizationDelay ??
+           const Duration(seconds: 10);
 
-  final Duration connectionStabilizationDelay;
+  /// How long `connect()` waits for a BLE printer before reporting failure.
+  final Duration connectionTimeout;
+
+  @Deprecated('Use connectionTimeout instead.')
+  Duration get connectionStabilizationDelay => connectionTimeout;
 
   BleConfig copyWith({
+    Duration? connectionTimeout,
+    @Deprecated('Use connectionTimeout instead.')
     Duration? connectionStabilizationDelay,
-  }) =>
-      BleConfig(
-        connectionStabilizationDelay:
-            connectionStabilizationDelay ?? this.connectionStabilizationDelay,
-      );
+  }) => BleConfig(
+    connectionTimeout:
+        connectionTimeout ??
+        connectionStabilizationDelay ??
+        this.connectionTimeout,
+  );
 
   @override
-  String toString() =>
-      'BleConfig(connectionStabilizationDelay: $connectionStabilizationDelay)';
+  String toString() => 'BleConfig(connectionTimeout: $connectionTimeout)';
 }

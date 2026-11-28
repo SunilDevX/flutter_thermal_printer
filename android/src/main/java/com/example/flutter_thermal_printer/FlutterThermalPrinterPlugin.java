@@ -1,10 +1,14 @@
 package com.example.flutter_thermal_printer;
 
 import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
 
 import androidx.annotation.NonNull;
 
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.plugin.common.MethodCall;
@@ -23,6 +27,9 @@ public class FlutterThermalPrinterPlugin implements FlutterPlugin, MethodCallHan
   private EventChannel eventChannel;
   private Context context;
   private UsbPrinter usbPrinter;
+  // One thread: USB jobs run in order, off the UI thread.
+  private ExecutorService printExecutor;
+  private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
   @Override
   public void onAttachedToEngine(@NonNull FlutterPluginBinding flutterPluginBinding) {
@@ -32,6 +39,7 @@ public class FlutterThermalPrinterPlugin implements FlutterPlugin, MethodCallHan
     context = flutterPluginBinding.getApplicationContext();
     usbPrinter = new UsbPrinter(context); 
     eventChannel.setStreamHandler(usbPrinter);
+    printExecutor = Executors.newSingleThreadExecutor();
   }
 
   @Override
@@ -59,8 +67,10 @@ public class FlutterThermalPrinterPlugin implements FlutterPlugin, MethodCallHan
               String vendorId = call.argument("vendorId");
               String productId = call.argument("productId");
               List<Integer> data = call.argument("data");
-              usbPrinter.printText(vendorId, productId, data);
-              result.success(true);
+              printExecutor.execute(() -> {
+                  boolean printed = usbPrinter.printText(vendorId, productId, data);
+                  mainHandler.post(() -> result.success(printed));
+              });
               break;
           }
           case "isConnected": {
@@ -78,5 +88,6 @@ public class FlutterThermalPrinterPlugin implements FlutterPlugin, MethodCallHan
   @Override
   public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
     channel.setMethodCallHandler(null);
+    printExecutor.shutdown();
   }
 }

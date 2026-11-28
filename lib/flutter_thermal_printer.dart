@@ -14,6 +14,7 @@ import 'utils/printer.dart';
 export 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 export 'package:flutter_thermal_printer/network/network_printer.dart';
 export 'package:flutter_thermal_printer/utils/ble_config.dart';
+export 'package:flutter_thermal_printer/utils/printer.dart';
 export 'package:universal_ble/universal_ble.dart';
 
 /// Main class for thermal printer operations across all platforms
@@ -68,14 +69,16 @@ class FlutterThermalPrinter {
   /// Connect to a printer device
   ///
   /// [device] The printer device to connect to.
-  /// [connectionStabilizationDelay] Optional delay to wait after connection is established
-  /// before considering it stable. Defaults to [BleConfig.connectionStabilizationDelay].
+  /// [connectionTimeout] How long to wait for a BLE printer to connect.
+  /// Defaults to [BleConfig.connectionTimeout].
   Future<bool> connect(
     Printer device, {
+    Duration? connectionTimeout,
+    @Deprecated('Use connectionTimeout instead.')
     Duration? connectionStabilizationDelay,
   }) async => PrinterManager.instance.connect(
     device,
-    connectionStabilizationDelay: connectionStabilizationDelay,
+    connectionTimeout: connectionTimeout ?? connectionStabilizationDelay,
   );
 
   /// Disconnect from a printer device
@@ -83,13 +86,13 @@ class FlutterThermalPrinter {
     await PrinterManager.instance.disconnect(device);
   }
 
-  /// Print raw data to printer
+  /// Print raw data to printer. Returns whether all bytes reached the printer.
   ///
   /// [device] The printer device to print to.
   /// [bytes] The raw bytes to print.
-  /// [longData] Whether the data is long and should be split into chunks.
-  /// [chunkSize] The size of each chunk if [longData] is true.
-  Future<void> printData(
+  /// [longData] Adds a 10 ms pause between BLE writes.
+  /// [chunkSize] Bytes per BLE write. Defaults to the negotiated MTU minus 3.
+  Future<bool> printData(
     Printer device,
     List<int> bytes, {
     bool longData = false,
@@ -97,11 +100,6 @@ class FlutterThermalPrinter {
   }) async => PrinterManager.instance.printData(
     device,
     bytes,
-
-    ///
-    /// [refreshDuration] The duration between each scan refresh.
-    /// [connectionTypes] List of connection types to scan for (BLE, USB).
-    /// [androidUsesFineLocation] Whether to use fine location on Android for BLE scanning.
     longData: longData,
     chunkSize: chunkSize,
   );
@@ -133,14 +131,6 @@ class FlutterThermalPrinter {
   Future<void> turnOnBluetooth() async {
     await PrinterManager.instance.turnOnBluetooth();
   }
-
-  ///
-  /// [context] The build context.
-  /// [widget] The widget to capture.
-  /// [delay] Delay before capturing the screenshot.
-  /// [customWidth] Optional custom width for the image.
-  /// [paperSize] The paper size of the printer.
-  /// [generator] Optional ESC/POS generator.
 
   /// Check if Bluetooth is turned on
   Future<bool> isBleTurnedOn() async => PrinterManager.instance.isBleTurnedOn();
@@ -177,16 +167,6 @@ class FlutterThermalPrinter {
 
       // Apply custom width if specified
       if (customWidth != null) {
-        ///
-        /// [context] The build context.
-        /// [printer] The printer to print to.
-        /// [widget] The widget to print.
-        /// [delay] Delay before capturing the screenshot.
-        /// [paperSize] The paper size of the printer.
-        /// [profile] Optional capability profile.
-        /// [printOnBle] Whether to print on BLE (deprecated/unused parameter?).
-        /// [cutAfterPrinted] Whether to cut the paper after printing.
-        /// [chunkSize] The size of chunks for data transmission.
         final width = _makeDivisibleBy8(customWidth);
         imagebytes = img.copyResize(imagebytes, width: width);
       }
@@ -202,15 +182,16 @@ class FlutterThermalPrinter {
     }
   }
 
-  /// Optimized widget printing with better resource management
-  Future<void> printWidget(
+  /// Captures [widget] as an image and prints it. Returns whether the image
+  /// (and the cut, if requested) reached the printer. Throws if the widget
+  /// cannot be captured.
+  Future<bool> printWidget(
     BuildContext context, {
     required Printer printer,
     required Widget widget,
     Duration delay = const Duration(milliseconds: 10),
     PaperSize paperSize = PaperSize.mm80,
     CapabilityProfile? profile,
-    bool printOnBle = false,
     bool cutAfterPrinted = true,
     int? chunkSize,
   }) async {
@@ -223,8 +204,7 @@ class FlutterThermalPrinter {
         delay: delay,
       );
 
-      // Handle other platforms with chunked approach
-      await _printChunkedWidget(
+      return await _printChunkedWidget(
         image,
         printer,
         paperSize,
@@ -293,7 +273,7 @@ class FlutterThermalPrinter {
 
   /// Print widget using chunked approach for better memory management
   /// Skip chunking for macOS platform
-  Future<void> _printChunkedWidget(
+  Future<bool> _printChunkedWidget(
     Uint8List image,
     Printer printer,
     PaperSize paperSize,
@@ -319,7 +299,7 @@ class FlutterThermalPrinter {
       if (cutAfterPrinted) {
         raster += ticket.cut();
       }
-      await printData(printer, raster, longData: true, chunkSize: chunkSize);
+      return printData(printer, raster, longData: true, chunkSize: chunkSize);
     } else {
       // For other platforms, use chunked approach
       const chunkHeight = 30;
@@ -345,16 +325,21 @@ class FlutterThermalPrinter {
 
         raster += ticket.imageRaster(croppedImage);
       }
-      await printData(printer, raster, longData: true, chunkSize: chunkSize);
-
-      if (cutAfterPrinted) {
-        await printData(
-          printer,
-          ticket.cut(),
-          longData: true,
-          chunkSize: chunkSize,
-        );
+      final printed = await printData(
+        printer,
+        raster,
+        longData: true,
+        chunkSize: chunkSize,
+      );
+      if (!printed || !cutAfterPrinted) {
+        return printed;
       }
+      return printData(
+        printer,
+        ticket.cut(),
+        longData: true,
+        chunkSize: chunkSize,
+      );
     }
   }
 }

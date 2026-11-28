@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_thermal_printer/flutter_thermal_printer.dart';
 import 'package:flutter_thermal_printer/flutter_thermal_printer_method_channel.dart';
 import 'package:flutter_thermal_printer/flutter_thermal_printer_platform_interface.dart';
-import 'package:flutter_thermal_printer/utils/printer.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 class MockFlutterThermalPrinterPlatform
@@ -20,11 +19,11 @@ class MockFlutterThermalPrinterPlatform
   Future<bool> connect(Printer device) async => true;
 
   @override
-  Future<void> printText(
+  Future<bool> printText(
     Printer device,
     Uint8List data, {
     String? path,
-  }) async {}
+  }) async => true;
 
   @override
   Future<bool> isConnected(Printer device) async => false;
@@ -63,10 +62,7 @@ void main() {
     });
 
     test('instance is FlutterThermalPrinter type', () {
-      expect(
-        FlutterThermalPrinter.instance,
-        isA<FlutterThermalPrinter>(),
-      );
+      expect(FlutterThermalPrinter.instance, isA<FlutterThermalPrinter>());
     });
 
     test('devicesStream is available', () {

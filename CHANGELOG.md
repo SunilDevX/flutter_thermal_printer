@@ -1,13 +1,28 @@
 ## 3.0.0
 
-**Breaking:** this release moves to `universal_ble` 3.x, which this package re-exports. If your app uses `universal_ble` types directly, check its [3.0.0 changelog](https://pub.dev/packages/universal_ble/changelog). In particular, BLE device IDs (Android MAC addresses) are now lower-case, so compare them case-insensitively or re-save any stored IDs.
+**Breaking changes**
 
-* Updated `universal_ble` to `^3.0.0`. `Printer.copyWith` now also accepts `deviceId` to match `BleDevice.copyWith`.
-* Fixed `connectionState` for USB and network printers. It now follows `isConnected` instead of asking the BLE stack about a non-BLE address.
-* Fixed web builds with `--wasm`. The Windows-only code is now selected with `dart.library.ffi` instead of `dart.library.html`.
-* Fixed an Android crash on the second USB connect after `stopScan()`. `connect` now returns whether the app has permission for the device instead of always `true`.
-* Fixed macOS printing failing with "/usr/bin/lp: No such file or directory". Jobs are now sent to the CUPS queue ID instead of the printer's display name.
-* Fixed the macOS build with the macOS 27 SDK while still building with older Xcode versions. Thanks to `@yahya-sh` for PR #55.
+* `printData` and `printWidget` now return whether printing succeeded.
+* `chunkSize` now means bytes per Bluetooth write, not MTU.
+* Renamed `connectionStabilizationDelay` to `connectionTimeout`; old name still works.
+* Removed the unused `printOnBle` parameter from `printWidget`.
+* Requires `universal_ble` 3.4.2; Bluetooth device IDs are now lower-case.
+
+**Fixes**
+
+* Android: large USB prints no longer get cut off.
+* Android: USB printing no longer freezes the app.
+* Android: USB printers with several interfaces can now print.
+* Android: fixed crash on second USB connect after `stopScan()`.
+* Android: USB `connect()` returns `false` until permission is granted.
+* macOS: fixed "/usr/bin/lp: No such file or directory" print error.
+* macOS: builds with the macOS 27 SDK. Thanks `@yahya-sh`!
+* Web: apps using this package now build with `--wasm`.
+* USB and network printers now report the correct `connectionState`.
+
+**Improvements**
+
+* `Printer` is now exported from the main package import.
 
 ## 2.3.0
 
