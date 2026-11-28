@@ -20,6 +20,9 @@
 * macOS: builds with the macOS 27 SDK. Thanks `@yahya-sh`!
 * Web: apps using this package now build with `--wasm`.
 * USB and network printers now report the correct `connectionState`.
+* Network: refused or unknown hosts report `printerConnected`, not `timeout`.
+* Network: a failed print no longer breaks the following prints.
+* Network: prints to a stalled printer fail after `writeTimeout` (30 s).
 
 **Improvements**
 

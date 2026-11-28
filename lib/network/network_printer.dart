@@ -1,18 +1,24 @@
+import 'dart:async';
 import 'dart:io';
 import 'network_print_result.dart';
 
 /// Optimized network thermal printer with improved connection management
 class FlutterThermalPrinterNetwork {
+  /// [timeout] bounds connecting. [writeTimeout] bounds handing a ticket to
+  /// the network; a printer that stops reading fails the print after it.
   FlutterThermalPrinterNetwork(
     String host, {
     int port = 9100,
     Duration timeout = const Duration(seconds: 5),
+    Duration writeTimeout = const Duration(seconds: 30),
   }) : _host = host,
        _port = port,
-       _timeout = timeout;
+       _timeout = timeout,
+       _writeTimeout = writeTimeout;
   final String _host;
   final int _port;
   final Duration _timeout;
+  final Duration _writeTimeout;
 
   bool _isConnected = false;
   Socket? _socket;
@@ -31,9 +37,13 @@ class FlutterThermalPrinterNetwork {
       );
       _isConnected = true;
       return NetworkPrintResult.success;
-    } on SocketException {
+    } on SocketException catch (e) {
       _isConnected = false;
-      return NetworkPrintResult.timeout;
+      // Dart reports a connect timeout without an OS error; refused,
+      // unreachable and unknown hosts carry one.
+      return e.osError == null
+          ? NetworkPrintResult.timeout
+          : NetworkPrintResult.printerConnected;
     } catch (e) {
       _isConnected = false;
       return NetworkPrintResult.timeout;
@@ -68,27 +78,35 @@ class FlutterThermalPrinterNetwork {
       }
 
       _socket!.add(data);
-      await _socket!.flush();
+      await _socket!.flush().timeout(_writeTimeout);
 
       if (isDisconnect) {
         await disconnect();
       }
 
       return NetworkPrintResult.success;
-    } on SocketException {
-      _isConnected = false;
+    } on TimeoutException {
+      _drop();
       return NetworkPrintResult.timeout;
     } catch (e) {
-      return NetworkPrintResult.timeout;
+      // The socket is dead, so the next print must reconnect.
+      _drop();
+      return NetworkPrintResult.printerConnected;
     }
+  }
+
+  void _drop() {
+    _socket?.destroy();
+    _socket = null;
+    _isConnected = false;
   }
 
   /// Disconnect with proper resource cleanup
   Future<NetworkPrintResult> disconnect({Duration? timeout}) async {
     try {
       if (_socket != null) {
-        await _socket!.flush();
-        await _socket!.close();
+        await _socket!.flush().timeout(_writeTimeout);
+        await _socket!.close().timeout(_writeTimeout);
         _socket = null;
       }
       _isConnected = false;
@@ -99,8 +117,7 @@ class FlutterThermalPrinterNetwork {
 
       return NetworkPrintResult.success;
     } catch (e) {
-      _isConnected = false;
-      _socket = null;
+      _drop();
       return NetworkPrintResult.success; // Still consider it successful cleanup
     }
   }
