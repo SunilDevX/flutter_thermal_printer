@@ -18,6 +18,9 @@
 * Android: USB `connect()` returns `false` until permission is granted.
 * macOS: fixed "/usr/bin/lp: No such file or directory" print error.
 * macOS: builds with the macOS 27 SDK. Thanks `@yahya-sh`!
+* macOS: printing no longer blocks the UI.
+* macOS: `connect()` no longer crashes on printers missing `productId`.
+* macOS: paused print queues now report as not connected.
 * Web: apps using this package now build with `--wasm`.
 * USB and network printers now report the correct `connectionState`.
 
