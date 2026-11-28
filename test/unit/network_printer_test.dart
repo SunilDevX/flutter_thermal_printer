@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_thermal_printer/network/network_print_result.dart';
@@ -37,10 +39,7 @@ void main() {
 
     group('connectionInfo', () {
       test('returns host:port format', () {
-        final printer = FlutterThermalPrinterNetwork(
-          '10.0.0.1',
-          port: 1234,
-        );
+        final printer = FlutterThermalPrinterNetwork('10.0.0.1', port: 1234);
         expect(printer.connectionInfo, '10.0.0.1:1234');
       });
 
@@ -54,8 +53,10 @@ void main() {
           '0.0.0.0:9100',
         );
         expect(
-          FlutterThermalPrinterNetwork('printer.local', port: 80)
-              .connectionInfo,
+          FlutterThermalPrinterNetwork(
+            'printer.local',
+            port: 80,
+          ).connectionInfo,
           'printer.local:80',
         );
       });
@@ -83,18 +84,20 @@ void main() {
       });
     });
 
+    // 192.168.255.255 times out on some networks and is refused at once on
+    // others, so those tests only expect a failure.
     group('connect', () {
-      test('returns timeout on invalid host', () async {
+      test('reports an unknown host as not connected', () async {
         final printer = FlutterThermalPrinterNetwork(
           '999.999.999.999',
           timeout: const Duration(milliseconds: 100),
         );
 
         final result = await printer.connect();
-        expect(result, NetworkPrintResult.timeout);
+        expect(result, NetworkPrintResult.printerConnected);
       });
 
-      test('returns timeout with short timeout on unreachable host', () async {
+      test('fails fast on an unreachable host', () async {
         final printer = FlutterThermalPrinterNetwork(
           '192.168.255.255',
           timeout: const Duration(milliseconds: 50),
@@ -103,7 +106,7 @@ void main() {
         final result = await printer.connect(
           timeout: const Duration(milliseconds: 50),
         );
-        expect(result, NetworkPrintResult.timeout);
+        expect(result, isNot(NetworkPrintResult.success));
         expect(printer.isConnected, false);
       });
 
@@ -114,7 +117,7 @@ void main() {
         );
 
         final result = await printer.connect();
-        expect(result, NetworkPrintResult.timeout);
+        expect(result, isNot(NetworkPrintResult.success));
       });
 
       test('can override timeout in connect call', () async {
@@ -126,7 +129,7 @@ void main() {
         final result = await printer.connect(
           timeout: const Duration(milliseconds: 10),
         );
-        expect(result, NetworkPrintResult.timeout);
+        expect(result, isNot(NetworkPrintResult.success));
       });
     });
 
@@ -177,7 +180,7 @@ void main() {
 
         final result = await printer.printTicket([1, 2, 3]);
 
-        expect(result, NetworkPrintResult.timeout);
+        expect(result, isNot(NetworkPrintResult.success));
       });
 
       test('respects isDisconnect parameter default true', () async {
@@ -208,18 +211,23 @@ void main() {
 
         final largeData = List.generate(10000, (i) => i % 256);
         final result = await printer.printTicket(largeData);
-        expect(result, NetworkPrintResult.timeout);
+        expect(result, isNot(NetworkPrintResult.success));
       });
 
       test('tickets sent at once arrive whole and in order', () async {
         final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
         addTearDown(server.close);
         final received = <Future<List<int>>>[];
-        server.listen(
-          (client) => received.add(
+        // The client can finish before the server sees the connection.
+        final bothAccepted = Completer<void>();
+        server.listen((client) {
+          received.add(
             client.fold<List<int>>([], (all, chunk) => all..addAll(chunk)),
-          ),
-        );
+          );
+          if (received.length == 2) {
+            bothAccepted.complete();
+          }
+        });
         final printer = FlutterThermalPrinterNetwork(
           InternetAddress.loopbackIPv4.address,
           port: server.port,
@@ -230,9 +238,68 @@ void main() {
           printer.printTicket(List.filled(50000, 2)),
         ]);
 
-        expect(results, [NetworkPrintResult.success, NetworkPrintResult.success]);
+        expect(results, [
+          NetworkPrintResult.success,
+          NetworkPrintResult.success,
+        ]);
+        await bothAccepted.future;
         final tickets = await Future.wait(received);
         expect(tickets, [List.filled(50000, 1), List.filled(50000, 2)]);
+      });
+
+      test('reports a refused connection as not connected', () async {
+        final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+        final port = server.port;
+        await server.close();
+        final printer = FlutterThermalPrinterNetwork(
+          InternetAddress.loopbackIPv4.address,
+          port: port,
+        );
+
+        expect(
+          await printer.printTicket([1]),
+          NetworkPrintResult.printerConnected,
+        );
+        expect(printer.isConnected, isFalse);
+      });
+
+      test('a printer that stops reading times out, and the next print '
+          'reconnects', () async {
+        final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+        addTearDown(server.close);
+        final clients = <Socket>[];
+        final secondTicket = Completer<List<int>>();
+        server.listen((client) {
+          clients.add(client);
+          if (clients.length == 1) {
+            client.listen(null).pause(); // Never reads.
+          } else {
+            secondTicket.complete(
+              client.fold<List<int>>([], (all, chunk) => all..addAll(chunk)),
+            );
+          }
+        });
+        addTearDown(() {
+          for (final client in clients) {
+            client.destroy();
+          }
+        });
+        final printer = FlutterThermalPrinterNetwork(
+          InternetAddress.loopbackIPv4.address,
+          port: server.port,
+          writeTimeout: const Duration(milliseconds: 300),
+        );
+
+        // Larger than the socket buffers on both ends, so flush never ends.
+        final stuck = await printer.printTicket(
+          Uint8List(32 << 20),
+          isDisconnect: false,
+        );
+        expect(stuck, NetworkPrintResult.timeout);
+        expect(printer.isConnected, isFalse);
+
+        expect(await printer.printTicket([7]), NetworkPrintResult.success);
+        expect(await secondTicket.future, [7]);
       });
     });
 
@@ -244,7 +311,7 @@ void main() {
         );
 
         final result = await printer.printTicket([]);
-        expect(result, NetworkPrintResult.timeout);
+        expect(result, isNot(NetworkPrintResult.success));
       });
 
       test('handles localhost', () {
@@ -279,7 +346,7 @@ void main() {
         );
 
         final result = await printer.connect();
-        expect(result, NetworkPrintResult.timeout);
+        expect(result, isNot(NetworkPrintResult.success));
       });
     });
 
