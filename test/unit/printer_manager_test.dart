@@ -242,6 +242,35 @@ void main() {
         expect(mockPlatform.methodCalls, isEmpty);
       });
 
+      test('runs jobs for one printer one after another', () async {
+        mockPlatform.printTextDelay = const Duration(milliseconds: 20);
+        final results = await Future.wait([
+          PrinterManager.instance.printData(usbPrinter, [1]),
+          PrinterManager.instance.printData(usbPrinter, [2]),
+        ]);
+        expect(results, [true, true]);
+        expect(mockPlatform.printLog, ['start 1', 'end 1', 'start 2', 'end 2']);
+      }, skip: Platform.isWindows);
+
+      test('a failed job does not block the next one', () async {
+        mockPlatform.printTextResult = false;
+        final first = PrinterManager.instance.printData(usbPrinter, [1]);
+        final second = PrinterManager.instance.printData(usbPrinter, [2]);
+        expect(await first, isFalse);
+        expect(await second, isFalse);
+        expect(mockPlatform.printLog, ['start 1', 'end 1', 'start 2', 'end 2']);
+      }, skip: Platform.isWindows);
+
+      test('jobs for different printers do not wait for each other', () async {
+        mockPlatform.printTextDelay = const Duration(milliseconds: 20);
+        final otherPrinter = usbPrinter.copyWith(address: '9999');
+        await Future.wait([
+          PrinterManager.instance.printData(usbPrinter, [1]),
+          PrinterManager.instance.printData(otherPrinter, [2]),
+        ]);
+        expect(mockPlatform.printLog.take(2), ['start 1', 'start 2']);
+      }, skip: Platform.isWindows);
+
       test('rejects a chunkSize below 1', () {
         expect(
           () =>

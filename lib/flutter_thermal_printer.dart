@@ -325,21 +325,11 @@ class FlutterThermalPrinter {
 
         raster += ticket.imageRaster(croppedImage);
       }
-      final printed = await printData(
-        printer,
-        raster,
-        longData: true,
-        chunkSize: chunkSize,
-      );
-      if (!printed || !cutAfterPrinted) {
-        return printed;
+      // One job, so another print cannot land between the image and its cut.
+      if (cutAfterPrinted) {
+        raster += ticket.cut();
       }
-      return printData(
-        printer,
-        ticket.cut(),
-        longData: true,
-        chunkSize: chunkSize,
-      );
+      return printData(printer, raster, longData: true, chunkSize: chunkSize);
     }
   }
 }

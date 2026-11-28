@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_thermal_printer/network/network_print_result.dart';
 import 'package:flutter_thermal_printer/network/network_printer.dart';
@@ -207,6 +209,30 @@ void main() {
         final largeData = List.generate(10000, (i) => i % 256);
         final result = await printer.printTicket(largeData);
         expect(result, NetworkPrintResult.timeout);
+      });
+
+      test('tickets sent at once arrive whole and in order', () async {
+        final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+        addTearDown(server.close);
+        final received = <Future<List<int>>>[];
+        server.listen(
+          (client) => received.add(
+            client.fold<List<int>>([], (all, chunk) => all..addAll(chunk)),
+          ),
+        );
+        final printer = FlutterThermalPrinterNetwork(
+          InternetAddress.loopbackIPv4.address,
+          port: server.port,
+        );
+
+        final results = await Future.wait([
+          printer.printTicket(List.filled(50000, 1)),
+          printer.printTicket(List.filled(50000, 2)),
+        ]);
+
+        expect(results, [NetworkPrintResult.success, NetworkPrintResult.success]);
+        final tickets = await Future.wait(received);
+        expect(tickets, [List.filled(50000, 1), List.filled(50000, 2)]);
       });
     });
 

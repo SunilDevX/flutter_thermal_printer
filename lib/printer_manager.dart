@@ -223,6 +223,9 @@ class PrinterManager {
   /// Sends [bytes] to [printer] and returns whether all of them were handed
   /// to the printer. Failures are logged, not thrown.
   ///
+  /// Jobs for the same printer run one after another, so two calls made at
+  /// once cannot interleave their bytes.
+  ///
   /// [longData] adds a 10 ms pause between BLE writes.
   /// [chunkSize] is the number of bytes per BLE write; it defaults to the
   /// negotiated MTU minus 3. Values below 1 throw an [ArgumentError].
@@ -235,6 +238,32 @@ class PrinterManager {
     if (chunkSize != null && chunkSize < 1) {
       throw ArgumentError.value(chunkSize, 'chunkSize', 'must be at least 1');
     }
+    final key = '${printer.connectionType?.name}|${printer.address}';
+    final job = (_printQueues[key] ?? Future<void>.value()).then(
+      (_) =>
+          _sendData(printer, bytes, longData: longData, chunkSize: chunkSize),
+    );
+    // The tail never fails, so one broken job cannot stall the queue.
+    final tail = job.then<void>((_) {}, onError: (_) {});
+    _printQueues[key] = tail;
+    unawaited(
+      tail.then((_) {
+        if (identical(_printQueues[key], tail)) {
+          _printQueues.remove(key);
+        }
+      }),
+    );
+    return job;
+  }
+
+  final Map<String, Future<void>> _printQueues = {};
+
+  Future<bool> _sendData(
+    Printer printer,
+    List<int> bytes, {
+    required bool longData,
+    int? chunkSize,
+  }) async {
     if (_usesMacOSQueue(printer) ||
         printer.connectionType == ConnectionType.USB) {
       if (Platform.isWindows) {
