@@ -8,6 +8,10 @@ analyzer:
     - "**/*.g.dart"
     - "**/*.freezed.dart"
     - "build/**"
+    - android/**
+    - ios/**
+    - windows/**
+    - macos/**
   strong-mode:
     implicit-casts: false
     implicit-dynamic: false
