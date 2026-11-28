@@ -3,6 +3,9 @@
 import 'dart:async';
 import 'dart:developer';
 
+// shortcut: material.dart is deprecated in newer stable Flutter for package:material_ui;
+// switch once the example can require that Flutter version.
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_thermal_printer/flutter_thermal_printer.dart';

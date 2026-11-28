@@ -15,7 +15,7 @@ class PrinterNames {
 }
 
 class RawPrinter {
-  RawPrinter(String _, __);
+  RawPrinter(String _, Object? _);
 
   bool printEscPosWin32(List<int> data) {
     throw UnsupportedError(
