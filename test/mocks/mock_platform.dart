@@ -12,7 +12,11 @@ class MockFlutterThermalPrinterPlatform extends FlutterThermalPrinterPlatform
   bool isConnectedResult = false;
   bool disconnectResult = true;
   bool printTextResult = true;
+  Duration printTextDelay = Duration.zero;
   dynamic convertImageResult;
+
+  /// `start <first byte>` / `end <first byte>` per printText call, in order.
+  final List<String> printLog = [];
 
   final List<String> methodCalls = [];
   final List<dynamic> methodArguments = [];
@@ -26,6 +30,8 @@ class MockFlutterThermalPrinterPlatform extends FlutterThermalPrinterPlatform
     isConnectedResult = false;
     disconnectResult = true;
     printTextResult = true;
+    printTextDelay = Duration.zero;
+    printLog.clear();
     convertImageResult = null;
   }
 
@@ -66,6 +72,9 @@ class MockFlutterThermalPrinterPlatform extends FlutterThermalPrinterPlatform
   Future<bool> printText(Printer device, Uint8List data, {String? path}) async {
     methodCalls.add('printText');
     methodArguments.add({'device': device, 'data': data, 'path': path});
+    printLog.add('start ${data.first}');
+    await Future<void>.delayed(printTextDelay);
+    printLog.add('end ${data.first}');
     return printTextResult;
   }
 

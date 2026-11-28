@@ -10,6 +10,7 @@
 
 **Fixes**
 
+* Prints sent at the same time no longer mix together.
 * Android: large USB prints no longer get cut off.
 * Android: USB printing no longer freezes the app.
 * Android: USB printers with several interfaces can now print.

@@ -7,9 +7,9 @@ class FlutterThermalPrinterNetwork {
     String host, {
     int port = 9100,
     Duration timeout = const Duration(seconds: 5),
-  })  : _host = host,
-        _port = port,
-        _timeout = timeout;
+  }) : _host = host,
+       _port = port,
+       _timeout = timeout;
   final String _host;
   final int _port;
   final Duration _timeout;
@@ -18,9 +18,7 @@ class FlutterThermalPrinterNetwork {
   Socket? _socket;
 
   /// Connect to network printer with improved error handling
-  Future<NetworkPrintResult> connect({
-    Duration? timeout,
-  }) async {
+  Future<NetworkPrintResult> connect({Duration? timeout}) async {
     if (_isConnected && _socket != null) {
       return NetworkPrintResult.success;
     }
@@ -42,10 +40,24 @@ class FlutterThermalPrinterNetwork {
     }
   }
 
-  /// Print data with automatic connection management
+  Future<void> _printQueue = Future<void>.value();
+
+  /// Print data with automatic connection management. Tickets sent to one
+  /// instance print one after another, never interleaved.
   Future<NetworkPrintResult> printTicket(
     List<int> data, {
     bool isDisconnect = true,
+  }) {
+    final job = _printQueue.then(
+      (_) => _printTicket(data, isDisconnect: isDisconnect),
+    );
+    _printQueue = job.then<void>((_) {}, onError: (_) {});
+    return job;
+  }
+
+  Future<NetworkPrintResult> _printTicket(
+    List<int> data, {
+    required bool isDisconnect,
   }) async {
     try {
       if (!_isConnected || _socket == null) {
